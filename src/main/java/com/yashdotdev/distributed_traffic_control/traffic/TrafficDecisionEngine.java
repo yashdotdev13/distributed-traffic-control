@@ -47,7 +47,8 @@ public class TrafficDecisionEngine {
         QuotaConsumptionResult consumptionResult =
                 quotaCoordinator.tryConsume(
                         quotaKey,
-                        trafficPolicy.getCapacity()
+                        trafficPolicy.getCapacity(),
+                        trafficPolicy.getRefillRate()
                 );
 
         if (!consumptionResult.isConsumed()) {

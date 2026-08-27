@@ -1,6 +1,8 @@
 package com.yashdotdev.distributed_traffic_control.quota;
 
 import lombok.Getter;
+
+import java.time.Instant;
 import java.util.Objects;
 
 @Getter
@@ -9,11 +11,13 @@ public class Quota {
     private final QuotaKey quotaKey;
     private final long capacity;
     private long availableCapacity;
+    private Instant lastRefilledAt;
 
     public Quota(
             QuotaKey quotaKey,
             long capacity,
-            long availableCapacity
+            long availableCapacity,
+            Instant lastRefilledAt
     ) {
         this.quotaKey = Objects.requireNonNull(
                 quotaKey,
@@ -34,6 +38,11 @@ public class Quota {
 
         this.capacity = capacity;
         this.availableCapacity = availableCapacity;
+
+        this.lastRefilledAt = Objects.requireNonNull(
+                lastRefilledAt,
+                "lastRefilledAt must not be null"
+        );
     }
 
     public boolean hasAvailableCapacity() {
@@ -48,5 +57,21 @@ public class Quota {
         }
 
         availableCapacity--;
+    }
+
+    public void refill(long tokens, Instant refilledAt) {
+        if (tokens <= 0) {
+            return;
+        }
+
+        availableCapacity = Math.min(
+                capacity,
+                availableCapacity + tokens
+        );
+
+        lastRefilledAt = Objects.requireNonNull(
+                refilledAt,
+                "refilledAt must not be null"
+        );
     }
 }
