@@ -1,5 +1,6 @@
 package com.yashdotdev.distributed_traffic_control.quota;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
@@ -8,6 +9,15 @@ import java.util.concurrent.ConcurrentHashMap;
 public class InMemoryQuotaCoordinator implements QuotaCoordinator {
 
     private final Map<String, Quota> quotas = new ConcurrentHashMap<>();
+
+    private final Clock clock;
+
+    public InMemoryQuotaCoordinator() {
+        this(Clock.systemUTC());
+    }
+    public InMemoryQuotaCoordinator(Clock clock){
+        this.clock = clock;
+    }
 
     @Override
     public QuotaConsumptionResult tryConsume(
@@ -23,7 +33,7 @@ public class InMemoryQuotaCoordinator implements QuotaCoordinator {
                         quotaKey,
                         capacity,
                         capacity,
-                        Instant.now()
+                        clock.instant()
                 )
         );
 
@@ -50,7 +60,7 @@ public class InMemoryQuotaCoordinator implements QuotaCoordinator {
             Quota quota,
             long refillRate
     ) {
-        Instant now = Instant.now();
+        Instant now = clock.instant();
 
         long elapsedSeconds = Duration.between(
                 quota.getLastRefilledAt(),

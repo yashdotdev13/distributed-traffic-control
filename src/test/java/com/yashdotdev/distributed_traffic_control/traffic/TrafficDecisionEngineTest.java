@@ -7,7 +7,9 @@ import com.yashdotdev.distributed_traffic_control.policy.TrafficPolicyType;
 import com.yashdotdev.distributed_traffic_control.quota.InMemoryQuotaCoordinator;
 import org.junit.jupiter.api.Test;
 
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -190,5 +192,78 @@ class TrafficDecisionEngineTest {
 
         executorService.shutdown();
         assertEquals(capacity, allowedRequests);
+    }
+
+    @Test
+    void shouldAllowRequestAfterQuotaIsRefilled() {
+
+        MutableClock clock = new MutableClock(
+                Instant.parse("2026-08-28T10:00:00Z")
+        );
+
+        TrafficPolicy policy = new TrafficPolicy(
+                "refill-policy",
+                "Refill Traffic Policy",
+                TrafficPolicyType.TOKEN_BUCKET,
+                PolicyStatus.ACTIVE,
+                1,
+                1,
+                Instant.now(clock)
+        );
+
+        TrafficDecisionEngine trafficDecisionEngine =
+                new TrafficDecisionEngine(
+                        new InMemoryPolicyProvider(policy),
+                        new InMemoryQuotaCoordinator(clock)
+                );
+
+        TrafficRequest request = new TrafficRequest(
+                "request-1",
+                new TrafficSubject(
+                        "user-123",
+                        TrafficSubjectType.USER
+                ),
+                "/api/orders",
+                Instant.now(clock)
+        );
+
+        TrafficDecision firstDecision =
+                trafficDecisionEngine.evaluate(request);
+
+        TrafficDecision secondDecision =
+                trafficDecisionEngine.evaluate(request);
+
+        clock.advanceSeconds(1);
+
+        TrafficDecision thirdDecision =
+                trafficDecisionEngine.evaluate(request);
+
+        assertTrue(firstDecision.isAllowed());
+        assertFalse(secondDecision.isAllowed());
+        assertTrue(thirdDecision.isAllowed());
+    }
+
+    private static class MutableClock extends Clock {
+
+        private Instant currentTime;
+
+        private MutableClock(Instant currentTime) {
+            this.currentTime = currentTime;
+        }
+        @Override
+        public ZoneId getZone() {
+            return ZoneId.of("UTC");
+        }
+        @Override
+        public Clock withZone(ZoneId zone) {
+            return this;
+        }
+        @Override
+        public Instant instant() {
+            return currentTime;
+        }
+        public void advanceSeconds(long seconds) {
+            currentTime = currentTime.plusSeconds(seconds);
+        }
     }
 }
