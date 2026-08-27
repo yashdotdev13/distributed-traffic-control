@@ -1,4 +1,4 @@
-package com.yashdotdev.distributed_traffic_control.traffic;
+package com.yashdotdev.distributed_traffic_control.policy;
 
 import lombok.Getter;
 
