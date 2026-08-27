@@ -1,953 +1,696 @@
 # Product Scope
 
-## 1. Purpose
+## 1. Introduction
 
-This document defines the product scope for `distributed-traffic-control`.
+Distributed Traffic Control is a backend platform designed to define and enforce traffic-control policies across one or more gateway nodes.
 
-The purpose of this document is to establish a clear boundary around what the system is intended to build, what problems the initial implementation must solve, and which capabilities are intentionally deferred to later phases.
+The project focuses on the problem of controlling API traffic when requests are processed by multiple independently running nodes.
 
-`distributed-traffic-control` is not intended to be a generic API gateway, a full API management platform, or a simple standalone rate-limiting library.
+A simple local rate limiter can control traffic on a single application instance. However, when the application is horizontally scaled, multiple nodes may independently process requests for the same client or tenant.
 
-The project focuses specifically on the distributed problem of enforcing shared API traffic-control policies across multiple independently operating gateway nodes.
+The long-term objective of this project is to build a distributed traffic-control platform that can coordinate global traffic policies while keeping request evaluation as local as possible.
 
-The initial product scope is therefore centered around the following objective:
+The product will be developed progressively.
 
-> Build a distributed traffic-control platform that can enforce shared global API quotas across multiple gateway nodes while allowing common request decisions to be made locally whenever possible.
+The initial implementation will focus on local traffic-control capabilities and clean domain boundaries.
 
-The system will progressively evolve from a locally enforceable traffic-control engine into a distributed architecture capable of coordinating capacity, propagating policies, managing gateway state, and handling selected failure scenarios.
-
-The project will deliberately avoid introducing infrastructure or features that do not contribute directly to understanding or validating this distributed coordination problem.
+Distributed coordination, capacity allocation, policy propagation, and failure handling will be introduced in later phases.
 
 ---
 
-## 2. Product Boundary
+## 2. Product Goal
 
-The system exists between incoming API traffic and the backend services that process that traffic.
+The primary goal of Distributed Traffic Control is to enforce traffic-control policies across a distributed fleet of gateway nodes without requiring centralized coordination for every incoming request.
 
-Its primary responsibility is to determine whether a request should be allowed to continue based on the traffic-control policy associated with that request.
+The platform should eventually support a model in which:
 
-The simplified product boundary is:
+- A global traffic policy is defined centrally.
+- Gateway nodes receive the information required to enforce that policy.
+- Requests are evaluated locally whenever possible.
+- Global capacity is coordinated across multiple gateway nodes.
+- Policy changes can be propagated safely.
+- Gateway failures and stale coordination state can be handled predictably.
+
+The project is intended to focus on the distributed-systems challenges involved in traffic control rather than simply implementing a basic rate limiter.
+
+---
+
+## 3. In Scope
+
+### 3.1 Traffic Policies
+
+The system will support traffic-control policies that define how incoming traffic should be evaluated.
+
+A policy will initially contain information such as:
+
+- Unique policy identifier.
+- Policy name.
+- Traffic subject.
+- Traffic-control algorithm.
+- Configured capacity.
+- Evaluation period or refill configuration.
+- Policy status.
+- Policy version.
+
+An example policy may be conceptually represented as:
 
 ```text
-                         API Clients
-                              │
-                              ▼
-                  ┌─────────────────────┐
-                  │                     │
-                  │  API Traffic Control│
-                  │                     │
-                  └──────────┬──────────┘
-                             │
-                  ┌──────────┴──────────┐
-                  │                     │
-               Allowed                Rejected
-                  │                     │
-                  ▼                     ▼
-          Backend Service         HTTP Response
-          
+Policy: client-standard
 
+Traffic Subject: client-123
+Algorithm: Token Bucket
+Capacity: 1,000 requests
+Refill Rate: 1,000 requests per minute
+Status: ACTIVE
+Version: 1
 ```
 
-The system is responsible for traffic-control decisions.
+The policy model should be extensible.
 
-It is not responsible for implementing the complete business logic of the protected backend service.
+The initial implementation may apply policies to a single traffic subject, while future versions should support additional traffic dimensions.
 
-For example, the system may protect:
+Possible future dimensions include:
 
-/payments
-/orders
-/authentication
-/search
-/api/*
+- Client.
+- API key.
+- User.
+- Tenant.
+- IP address.
+- Application.
+- API route.
+- Service.
+- Geographic region.
 
-but it does not need to implement payment processing, order management, authentication providers, or search functionality.
+The introduction of additional traffic dimensions should not require the core traffic-control architecture to be rewritten.
 
-Backend applications are treated as traffic consumers protected by the platform.
+---
 
-3. In Scope
+### 3.2 Traffic Subject Identification
 
-The initial product scope includes the capabilities required to define, distribute, enforce, observe, and experimentally validate shared traffic-control policies.
+The system must identify the entity against which traffic should be controlled.
 
-The scope is divided into progressive capability areas.
+The initial implementation will support a simple traffic subject identifier.
 
-3.1 Traffic Policy Management
+For example:
 
-The system will support the definition and management of traffic-control policies.
+```text
+X-Client-Id: client-123
+```
 
-A policy will describe the traffic constraints that should apply to a specific traffic subject or resource.
+The HTTP or gateway layer will be responsible for extracting this information from an incoming request.
 
-The initial policy model will support concepts such as:
+The traffic-control domain should receive a normalized representation of the traffic subject.
 
-Policy identifier.
-Policy status.
-Traffic subject.
-Traffic resource.
-Rate-limiting algorithm.
-Request limit.
-Refill or time-window configuration.
-Burst capacity where applicable.
-Policy version.
-Creation and update metadata.
+The core domain must not depend directly on:
 
-A conceptual policy may look like:
+- HTTP headers.
+- Spring MVC controllers.
+- Servlet APIs.
+- Gateway-specific request objects.
 
-Policy ID:
-premium-client-policy
+This separation will allow the traffic-control engine to be integrated with different request-processing environments in the future.
 
-Subject:
-client-123
+---
 
-Resource:
-/payments
+### 3.3 Policy Resolution
 
-Algorithm:
-TOKEN_BUCKET
+After identifying the traffic subject, the system must determine which traffic policy applies to the request.
 
-Capacity:
-10,000
+The conceptual request flow is:
 
-Refill Rate:
-10,000 requests per minute
-
-Status:
-ACTIVE
-
-Version:
-12
-
-The policy model will be designed so that it can later support additional traffic dimensions without requiring the core architecture to be rewritten.
-
-3.2 Local Traffic Enforcement
-
-The system will initially support local request evaluation.
-
-A gateway node receiving a request should be able to determine the applicable traffic policy and evaluate whether the request can be allowed.
-
-The basic request flow is:
-
+```text
 Incoming Request
-       │
-       ▼
+        |
+        v
 Identify Traffic Subject
-       │
-       ▼
+        |
+        v
 Resolve Applicable Policy
-       │
-       ▼
-Evaluate Available Capacity
-       │
-       ├───────────────┐
-       ▼               ▼
-    Allowed         Rejected
-       │               │
-       ▼               ▼
-Forward Request   Return Response
+        |
+        v
+Evaluate Traffic Capacity
+        |
+        v
+Allow or Reject Request
+```
 
-The local enforcement engine will provide the foundation on which distributed coordination will later be introduced.
+The policy resolution mechanism should be abstracted from the enforcement logic.
 
-The initial implementation must ensure that the traffic-control domain is not tightly coupled to a specific HTTP endpoint or framework implementation.
+The enforcement engine should not directly depend on a specific storage technology.
 
-The enforcement logic should remain independently testable.
+The initial implementation may use an in-memory policy source.
 
-3.3 Algorithm Abstraction
+Future implementations may support:
+
+- Relational databases.
+- Redis.
+- Distributed configuration stores.
+- Control-plane APIs.
+- Event-driven policy propagation.
+
+---
+
+### 3.4 Local Traffic Enforcement
+
+The initial implementation will support local traffic enforcement.
+
+A node receiving a request should be able to:
+
+1. Identify the traffic subject.
+2. Resolve the applicable policy.
+3. Evaluate the request against the available local capacity.
+4. Produce an allow or reject decision.
+5. Return the decision to the request-processing layer.
+
+The local enforcement engine will maintain traffic-control state locally during the initial implementation.
+
+This stage is intended to establish a correct traffic-control domain before distributed coordination is introduced.
+
+The core enforcement logic should remain independently testable.
+
+---
+
+### 3.5 Traffic-Control Algorithms
 
 The platform will define an abstraction for traffic-control algorithms.
 
-The system should not assume that all traffic policies use the same algorithm.
+The architecture should not assume that every policy uses the same algorithm.
 
-The conceptual structure will be:
+The initial implementation will focus on one primary algorithm.
 
-TrafficControlAlgorithm
-        │
-        ├── Token Bucket
-        │
-        ├── Fixed Window
-        │
-        └── Sliding Window
+The first algorithm will be selected during the architecture and implementation phase.
 
-The initial implementation will focus on a single primary algorithm.
+The system should later be capable of supporting algorithms such as:
 
-Token Bucket is the preferred initial implementation because it naturally supports the concepts of bounded capacity, consumption, refill behavior, and burst handling.
+- Token Bucket.
+- Fixed Window.
+- Sliding Window.
+- Leaky Bucket.
 
-Additional algorithms may be implemented later when they provide meaningful value for experimentation or comparison.
+The policy and enforcement layers should depend on a common algorithm contract rather than the internal implementation of a specific algorithm.
 
-The initial scope does not require every algorithm to be implemented.
+---
 
-3.4 Distributed Gateway Nodes
+### 3.6 Traffic Decisions
 
-The system will support multiple independently operating gateway nodes.
+Every request evaluation must produce a clear traffic-control decision.
 
-The purpose of introducing multiple nodes is not simply horizontal scaling.
+A decision should indicate whether the request was allowed or rejected.
 
-Multiple nodes are required to reproduce the central distributed coordination problem.
+The decision model may contain information such as:
 
-The system must support scenarios such as:
+- Decision status.
+- Applied policy identifier.
+- Reason for rejection.
+- Remaining capacity.
+- Evaluation timestamp.
 
-                         Load Balancer
-                               │
-                ┌──────────────┼──────────────┐
-                │              │              │
-                ▼              ▼              ▼
-           Gateway A      Gateway B      Gateway C
+Conceptually, a decision may be represented as:
 
-The same traffic subject may send requests through different gateway nodes.
-
-For example:
-
-Client-123
-    │
-    ├── Request 1 → Gateway A
-    ├── Request 2 → Gateway B
-    ├── Request 3 → Gateway C
-    ├── Request 4 → Gateway A
-    └── Request 5 → Gateway B
-
-The system must therefore evolve beyond isolated local rate-limit counters.
-
-The initial distributed scope requires the project to demonstrate that adding additional gateway nodes does not simply multiply a shared global quota.
-
-3.5 Shared Global Traffic Policies
-
-The system will support policies whose limits apply collectively across multiple gateway nodes.
-
-For example:
-
-Client:
-client-123
-
-Global Limit:
-10,000 requests per minute
-
-This limit represents the total capacity available to the client across the gateway fleet.
-
-The following behavior is not acceptable:
-
-Gateway A → 10,000 requests
-Gateway B → 10,000 requests
-Gateway C → 10,000 requests
-
-Effective Capacity → 30,000 requests
-
-The intended behavior is:
-
-Global Capacity
-10,000 requests
-       │
-       ▼
-Distributed Across Gateway Fleet
-       │
-       ▼
-Total Consumption Remains Bounded
-
-The exact consistency guarantees and permitted over-allocation behavior will be defined separately during architecture and coordination design.
-
-The product scope requires the system to explicitly define and validate these guarantees rather than assuming perfect global consistency.
-
-3.6 Capacity Allocation
-
-The system will support the allocation of bounded traffic capacity to gateway nodes.
-
-A gateway node should not independently assume that the complete global quota is available to it.
-
-Instead, capacity should be coordinated.
-
-A simplified example is:
-
-Global Capacity
-10,000
-      │
-      ▼
-Control Plane
-      │
-      ├── Gateway A → 3,000
-      ├── Gateway B → 4,000
-      └── Gateway C → 3,000
-
-Gateway nodes can consume capacity that has been allocated to them locally.
-
-The system will explore mechanisms for:
-
-Requesting additional capacity.
-Granting capacity.
-Rejecting capacity requests.
-Tracking allocated capacity.
-Tracking consumed capacity.
-Detecting expired capacity.
-Reclaiming unused capacity.
-
-The specific allocation strategy may evolve during implementation.
-
-The initial product scope requires the architecture to support bounded allocation rather than requiring one fixed allocation algorithm from the beginning.
-
-3.7 Lease-Based Capacity Management
-
-Distributed capacity allocation introduces the problem of ownership.
-
-If a gateway receives capacity and then fails, disconnects, or becomes unavailable, the system must eventually determine what should happen to unused capacity.
-
-The product scope therefore includes lease-based capacity management.
-
-A conceptual lease is:
-
-Lease ID:
-lease-456
-
-Gateway:
-gateway-a
-
-Allocated Capacity:
-3,000 requests
-
-Consumed Capacity:
-1,200 requests
-
-Remaining Capacity:
-1,800 requests
-
-Expiration:
-2026-09-01T10:30:00Z
-
-Leases provide a bounded lifetime for distributed capacity ownership.
-
-The system will support concepts such as:
-
-Lease creation.
-Lease renewal.
-Lease expiration.
-Lease validation.
-Capacity reclamation.
-Gateway restart handling.
-
-The exact lease protocol and consistency model will be defined during later design phases.
-
-3.8 Policy Versioning
-
-Traffic policies may change while gateway nodes are actively processing requests.
-
-For example:
-
-Version 12
-
-Limit:
-10,000 requests/minute
-
-may be updated to:
-
-Version 13
-
-Limit:
-5,000 requests/minute
-
-The system must therefore treat policy updates as versioned distributed state.
-
-The initial product scope includes:
-
-Policy versions.
-Policy update tracking.
-Gateway awareness of policy versions.
-Propagation of policy changes.
-Detection of outdated policy state.
-
-The initial implementation does not need to solve every possible distributed configuration-management problem.
-
-However, it must provide explicit behavior for policy changes and avoid treating distributed policy propagation as an implementation detail.
-
-3.9 Gateway Registration and Identity
-
-Gateway nodes participating in distributed coordination must have a stable identity within the system.
-
-The product scope includes gateway concepts such as:
-
-Gateway identifier.
-Gateway registration.
-Gateway availability.
-Last known activity.
-Gateway capacity state.
-
-A conceptual gateway representation is:
-
-Gateway ID:
-gateway-a
-
-Status:
-ACTIVE
-
-Current Policy Version:
-12
-
-Active Leases:
-5
-
-Last Heartbeat:
-2026-09-01T10:15:00Z
-
-The exact service-discovery mechanism is not part of the initial product scope.
-
-The project only requires sufficient gateway identity and state management to support coordination experiments.
-
-3.10 Control-Plane Coordination
-
-The system will include a logical control-plane responsibility.
-
-The control plane will manage globally coordinated state and operations such as:
-
-Traffic policy management.
-Policy versioning.
-Gateway coordination.
-Capacity allocation.
-Lease management.
-Capacity reclamation.
-Gateway state tracking.
-
-The conceptual control-plane boundary is:
-
-                 ┌──────────────────────────┐
-                 │      CONTROL PLANE       │
-                 │                          │
-                 │ Policies                 │
-                 │ Policy Versions          │
-                 │ Capacity Allocation      │
-                 │ Lease Management         │
-                 │ Gateway Coordination     │
-                 └────────────┬─────────────┘
-                              │
-                       Coordination
-                              │
-              ┌───────────────┼───────────────┐
-              ▼               ▼               ▼
-         Gateway A       Gateway B       Gateway C
-
-The initial scope does not require the control plane to be implemented as multiple independent microservices.
-
-Logical separation is sufficient during early implementation.
-
-Physical deployment boundaries will be introduced when required to validate the distributed architecture.
-
-3.11 Policy Propagation
-
-Gateway nodes require policy information to make local decisions.
-
-The system will support a mechanism for propagating policy state from the control plane to gateway nodes.
-
-The product scope includes exploration of:
-
-Initial policy retrieval.
-Policy updates.
-Version comparison.
-Stale policy detection.
-Gateway recovery after disconnection.
-
-The implementation may initially use synchronous retrieval or polling.
-
-Later phases may introduce asynchronous propagation mechanisms when they provide meaningful architectural value.
-
-The project should avoid introducing a message broker solely because it is available.
-
-Asynchronous propagation will be introduced only when required by the architecture or experimental objectives.
-
-3.12 Administrative APIs
-
-The system will expose APIs required to manage and inspect traffic-control state.
-
-The initial administrative capabilities will include operations conceptually similar to:
-
-Create Policy
-Get Policy
-Update Policy
-Disable Policy
-List Policies
-
-The system will also expose operational information required for debugging and experimentation.
-
-Examples include:
-
-Gateway State
-Active Leases
-Capacity Allocation
-Policy Version
-Traffic Decisions
-
-The exact API contracts will be defined in a dedicated API specification phase.
-
-3.13 Request Decision APIs
-
-The system will expose or internally support a request-evaluation interface.
-
-A conceptual request is:
-
-Traffic Subject:
-client-123
-
-Resource:
-/payments
-
-Gateway:
-gateway-a
-
-The resulting decision may contain:
-
-Decision:
-ALLOWED
-
-Policy:
-premium-client-policy
-
-Remaining Local Capacity:
-847
-
-Policy Version:
-12
+```text
+ALLOW
+```
 
 or:
 
-Decision:
-REJECTED
+```text
+REJECT
 
-Reason:
-CAPACITY_EXHAUSTED
+Reason: TRAFFIC_LIMIT_EXCEEDED
+```
 
-Policy:
-premium-client-policy
+The decision model should remain extensible because distributed enforcement may later require additional information.
 
-Retry Information:
-optional
+Possible future information includes:
 
-The product scope requires structured traffic-control decisions rather than simple boolean results.
+- Policy version.
+- Capacity allocation identifier.
+- Lease identifier.
+- Retry-after duration.
+- Remaining allocated capacity.
 
-This information is required for observability, debugging, and distributed-system experiments.
+---
 
-3.14 Observability
+### 3.7 Request Rejection
 
-The system will provide sufficient operational visibility to understand distributed traffic-control behavior.
+When a request exceeds the available traffic capacity, the system must reject the request.
 
-The initial observability scope includes metrics and structured information related to:
+The core traffic-control domain will determine the traffic decision.
 
-Allowed requests.
-Rejected requests.
-Policy evaluation.
-Local capacity.
-Global capacity allocation.
-Lease creation.
-Lease expiration.
-Lease renewal.
-Gateway state.
-Coordination failures.
-Policy versions.
-Policy propagation delay.
+The HTTP or gateway integration layer will translate the rejection decision into an appropriate response.
 
-The project should support answering questions such as:
+The traffic-control domain should not contain HTTP response-generation logic.
 
-Why was this request rejected?
-Which gateway consumed the capacity?
-Which policy version was active?
-How much capacity is currently allocated?
-Did a gateway lose connectivity with the control plane?
+This separation will allow the same enforcement engine to be used in environments other than HTTP request processing.
 
-Observability is considered part of the product scope because distributed behavior cannot be meaningfully evaluated when internal state transitions are invisible.
+---
 
-3.15 Distributed-System Experiments
+## 4. Distributed Traffic-Control Scope
 
-The project will include reproducible experiments.
+The primary long-term scope of the project is distributed traffic control.
 
-The purpose of the experiments is to validate the architecture under conditions that expose distributed coordination behavior.
+A distributed deployment may contain multiple gateway nodes processing requests independently.
 
-The initial experiment scope includes scenarios such as:
+For example:
 
-Multiple gateways processing the same client traffic.
-Rapid quota consumption.
-Capacity exhaustion.
-Gateway restart.
-Gateway failure.
-Lease expiration.
-Control-plane unavailability.
-Policy updates.
-Policy propagation delay.
-Network communication failure.
+```text
+                    +-----------+
+Client Requests --->| Gateway A |
+                    +-----------+
 
-The system should make it possible to compare behavior across different coordination strategies where appropriate.
+                    +-----------+
+Client Requests --->| Gateway B |
+                    +-----------+
 
-The project is not limited to demonstrating a successful happy-path request flow.
+                    +-----------+
+Client Requests --->| Gateway C |
+                    +-----------+
+```
 
-Experimental validation is part of the intended engineering outcome.
+If each gateway independently maintains its own traffic-control state, a global traffic policy cannot be reliably enforced.
 
-4. Explicitly Out of Scope
+For example:
 
-The following capabilities are intentionally excluded from the initial product scope.
+```text
+Global Client Limit: 10,000 requests per minute
 
-4.1 Full API Gateway Functionality
+Gateway A Local Limit: 10,000 requests per minute
+Gateway B Local Limit: 10,000 requests per minute
+Gateway C Local Limit: 10,000 requests per minute
+```
 
-The project is not intended to replace a complete API gateway platform.
+If the same client distributes requests across all three nodes, the client may consume significantly more than the intended global quota.
 
-The initial implementation does not need to provide:
+The distributed architecture will address this coordination problem.
 
-Request routing.
-Request transformation.
-API composition.
-SSL termination.
-Complete authentication.
-Full authorization.
-API documentation hosting.
+---
 
-A lightweight gateway or traffic simulation layer is sufficient for validating the traffic-control architecture.
+## 5. Data Plane
 
-4.2 Full API Management Platform
+The data plane will be responsible for processing incoming application traffic.
 
-The system is not intended to compete with commercial API management products.
+Gateway nodes will form the primary components of the data plane.
 
-The initial scope excludes features such as:
+The data plane should eventually:
 
-Developer portals.
-API product monetization.
-Billing systems.
-Subscription management.
-API analytics dashboards for customers.
-Complete organization management.
-Complex multi-tenant administration.
+- Receive incoming requests.
+- Identify the traffic subject.
+- Resolve the applicable traffic policy.
+- Evaluate locally available traffic capacity.
+- Allow or reject requests.
+- Minimize additional latency in the critical request path.
 
-The focus remains on distributed traffic coordination.
+The data plane should not require a centralized coordination request for every incoming API request.
 
-4.3 Advanced Authentication and Authorization
+Local enforcement should remain the preferred execution path whenever valid local capacity is available.
 
-The system may require a simple mechanism for identifying traffic subjects.
+---
 
-However, building a complete authentication and authorization system is outside the project scope.
+## 6. Control Plane
 
-The initial implementation may use simplified identities such as:
+The control plane will manage the shared coordination responsibilities required by the distributed platform.
 
-Client ID
-API Key Identifier
-Tenant ID
-User ID
+The control plane will eventually manage capabilities such as:
 
-The project does not require implementing OAuth providers, identity servers, or complex authorization workflows.
+- Traffic policy creation.
+- Traffic policy updates.
+- Policy versioning.
+- Policy distribution.
+- Gateway registration.
+- Gateway membership awareness.
+- Global capacity coordination.
+- Capacity allocation.
+- Capacity recovery.
 
-4.4 Every Rate-Limiting Algorithm
+The control plane should not process normal application requests directly.
 
-The platform will support algorithm abstraction, but the initial implementation does not need to implement every known rate-limiting algorithm.
+Its responsibility is to coordinate and distribute the information required by data-plane nodes.
 
-The first implementation will focus on the algorithm that best supports the initial distributed coordination model.
+This separation allows request processing and distributed coordination to evolve independently.
 
-Additional algorithms will only be introduced when they provide meaningful comparison or functionality.
+---
 
-4.5 Globally Perfect Strong Consistency
+## 7. Capacity Allocation
 
-The initial product does not require perfect globally synchronous quota accounting for every request.
+The distributed platform will eventually support allocating portions of global traffic capacity to individual gateway nodes.
 
-Such a requirement would contradict the objective of avoiding centralized coordination on the common request path.
+For example:
 
-Instead, the architecture will explicitly define bounded consistency and coordination guarantees.
+```text
+Global Quota: 10,000 requests per minute
 
-The project will document trade-offs between:
+Gateway A Allocation: 3,000
+Gateway B Allocation: 3,000
+Gateway C Allocation: 4,000
+```
 
-Consistency.
-Latency.
-Availability.
-Coordination frequency.
-Potential unused capacity.
-Potential temporary over-allocation.
+Each gateway can then evaluate requests locally against its allocated capacity.
 
-The objective is to understand and control these trade-offs rather than pretending they do not exist.
+The gateway does not need to contact the central coordination component for every request.
 
-4.6 Multi-Region Deployment
+When additional capacity is required, or when existing capacity expires, the gateway can coordinate with the control plane.
 
-The initial distributed system will focus on a single logical deployment environment.
+This approach reduces centralized coordination in the critical request path.
 
-Global multi-region traffic control introduces additional problems involving:
+The initial implementation will not include distributed capacity allocation.
 
-Cross-region latency.
-Replicated control planes.
-Regional partitions.
-Clock differences.
-Cross-region consistency.
+The initial domain model should, however, avoid assumptions that would prevent capacity allocation from being introduced later.
 
-These problems are outside the initial scope.
+Future allocation strategies may include:
 
-The architecture may remain extensible toward future multi-region experimentation.
+- Static allocation.
+- Equal allocation.
+- Weighted allocation.
+- Demand-based allocation.
+- Adaptive allocation.
 
-4.7 Automatic Machine-Learning-Based Traffic Decisions
+---
 
-The initial system will use deterministic traffic-control policies.
+## 8. Policy Propagation
 
-Machine learning, anomaly detection, predictive scaling, and AI-driven quota adjustment are not required.
+The distributed platform will eventually support propagating policy updates to gateway nodes.
 
-These features do not directly contribute to the central distributed coordination problem.
+Policies may change while nodes are actively processing traffic.
 
-4.8 Kubernetes Operator Development
+For example:
 
-The project may eventually be deployed on Kubernetes.
+```text
+Policy Version 1
+       |
+       v
+Gateway Nodes Enforce Version 1
+       |
+       v
+Policy Updated
+       |
+       v
+Policy Version 2
+       |
+       v
+Updated Policy Propagated to Gateway Nodes
+```
 
-However, building a custom Kubernetes operator or controller is outside the initial product scope.
+The distributed system will eventually need to handle:
 
-Standard deployment manifests, container orchestration, and scaling mechanisms are sufficient.
+- Policy versions.
+- Stale policies.
+- Delayed updates.
+- Update ordering.
+- Gateway synchronization.
+- Safe policy replacement.
 
-4.9 Complex User Interface
+The initial implementation may store policies locally.
 
-The initial product does not require a production-grade frontend.
+However, policy versioning should be considered from the beginning because it will become important when policies are distributed between nodes.
 
-The system can initially be operated through:
+---
 
-REST APIs.
-OpenAPI documentation.
-Command-line tools.
-Metrics dashboards.
+## 9. Failure Handling
 
-A user interface may be introduced later if it provides meaningful product value.
+The distributed platform must eventually account for partial failures.
 
-5. Initial Product Architecture Scope
+A gateway node may:
 
-The initial implementation will begin with a modular architecture.
+- Stop unexpectedly.
+- Restart.
+- Lose network connectivity.
+- Become temporarily unavailable.
+- Continue operating with stale coordination information.
 
-The project should not immediately be divided into multiple microservices.
+The control plane may also become temporarily unavailable.
 
-The initial structure will separate logical responsibilities while keeping development and debugging manageable.
+The future distributed implementation must define how traffic enforcement behaves during these situations.
 
-A conceptual structure is:
+Important questions include:
 
-distributed-traffic-control
-│
-├── policy
-│   ├── domain
-│   ├── application
-│   ├── api
-│   └── infrastructure
-│
-├── enforcement
-│   ├── domain
-│   ├── application
-│   └── infrastructure
-│
-├── gateway
-│
-├── coordination
-│
-├── lease
-│
-├── observability
-│
-└── shared
+- What happens to capacity allocated to a failed gateway?
+- When can unused capacity be recovered?
+- How long may a gateway continue using existing allocations?
+- What happens when a gateway cannot contact the control plane?
+- How should stale policies be handled?
+- How should expired allocations be handled?
 
-This structure represents logical boundaries.
+These scenarios are not part of the initial local enforcement implementation.
 
-The system can later evolve toward independently deployable gateway and control-plane components.
+They are part of the long-term distributed-system scope and will be addressed in later phases.
 
-The intended progression is:
+---
 
-Stage 1
-Modular Local Traffic Control
-        │
-        ▼
-Stage 2
-Multiple Gateway Instances
-        │
-        ▼
-Stage 3
-Centralized Coordination
-        │
-        ▼
-Stage 4
-Distributed Capacity Allocation
-        │
-        ▼
-Stage 5
-Lease Management and Recovery
-        │
-        ▼
-Stage 6
-Failure Experiments and Optimization
+## 10. Observability
 
-This progression allows each distributed capability to be introduced and validated incrementally.
+The platform should eventually provide visibility into traffic-control behavior and distributed coordination.
 
-6. Initial Implementation Priorities
+Important metrics may include:
 
-The first implementation priorities are intentionally narrower than the complete product vision.
+- Total requests evaluated.
+- Requests allowed.
+- Requests rejected.
+- Requests evaluated per policy.
+- Requests evaluated per traffic subject.
+- Available local capacity.
+- Capacity allocation per gateway.
+- Allocation renewal failures.
+- Policy propagation status.
+- Policy version mismatches.
+- Gateway coordination failures.
 
-The system should first establish a reliable local traffic-control foundation.
-
-The initial implementation priorities are:
-
-6.1 Policy Domain
-
-Define the core traffic-policy domain model.
-
-6.2 Algorithm Abstraction
-
-Create a stable abstraction for traffic-control algorithms.
-
-6.3 Token Bucket Implementation
-
-Implement and test the initial local traffic-control algorithm.
-
-6.4 Local Request Evaluation
-
-Support deterministic allow or reject decisions.
-
-6.5 Policy Management APIs
-
-Provide APIs for creating and managing traffic policies.
-
-6.6 Structured Decisions
-
-Return meaningful traffic-control decisions rather than simple boolean values.
-
-6.7 Observability Foundation
-
-Introduce metrics and logging required to understand request decisions.
-
-The distributed control plane will not be implemented before the local model and enforcement boundaries are stable.
-
-7. Future Expansion
-
-The following capabilities are potential future extensions but are not commitments for the initial implementation.
-
-Adaptive capacity allocation.
-Dynamic gateway-aware allocation.
-Asynchronous policy propagation.
-Event-driven coordination.
-Redis-backed distributed coordination experiments.
-Multiple control-plane replicas.
-Multi-region traffic policies.
-Hierarchical quotas.
-Tenant-level quotas.
-User-level quotas.
-API-key quotas.
-Resource-level quotas.
-Concurrency limiting.
-Distributed circuit-breaking integration.
-Traffic prioritization.
-Premium and standard traffic tiers.
-Administrative dashboard.
-Kubernetes-based large-scale experiments.
-
-Future features should only be added when they extend the central distributed traffic-control problem or provide meaningful experimental value.
-
-8. Scope Principles
-
-All implementation decisions should follow several scope principles.
-
-8.1 Distributed Complexity Must Be Intentional
-
-The project should not introduce distributed infrastructure merely to appear complex.
-
-Every distributed component must solve a real problem.
+The platform should also support structured logging for important events.
 
 Examples include:
 
-Coordinating shared capacity.
-Propagating policy changes.
-Detecting failed gateways.
-Reclaiming expired leases.
-8.2 Avoid Premature Microservices
+- Policy creation.
+- Policy updates.
+- Policy propagation failures.
+- Gateway registration.
+- Gateway failures.
+- Capacity allocation.
+- Capacity expiration.
+- Repeated traffic rejection.
 
-Logical separation does not automatically require physical service separation.
+Observability will be introduced progressively.
 
-The system should begin with the smallest architecture capable of expressing the required boundaries.
+The core traffic-control domain should not be tightly coupled to a specific monitoring implementation.
 
-Deployable components should be separated when independent deployment, scaling, failure isolation, or distributed experimentation makes that separation necessary.
+---
 
-8.3 Preserve the Critical Path
+## 11. Initial API Scope
 
-The common request path should remain as simple and low-latency as possible.
+The initial implementation will expose only the APIs required to demonstrate and validate the traffic-control functionality.
 
-The architecture should avoid adding unnecessary dependencies to every request.
+The API surface will remain intentionally small.
 
-Whenever possible:
+Initial policy operations may include:
 
-Request
-   │
-   ▼
-Local Policy State
-   │
-   ▼
-Local Capacity
-   │
-   ▼
-Decision
+```text
+POST /api/policies
+GET  /api/policies
+GET  /api/policies/{policyId}
+```
 
-Coordination should occur outside this path when local state remains valid.
+A protected demonstration endpoint may also be introduced.
 
-8.4 Make Trade-Offs Explicit
+For example:
 
-Distributed systems involve trade-offs.
+```text
+GET /api/demo/resource
+```
 
-The project should explicitly document decisions involving:
+Requests to the protected endpoint should pass through the traffic-control enforcement flow.
 
-Consistency.
-Availability.
-Latency.
-Coordination overhead.
-Capacity utilization.
-Failure behavior.
+The exact endpoint design may evolve during implementation.
 
-The objective is not to claim that every property can be maximized simultaneously.
+The public API should not expose unnecessary internal details of the traffic-control algorithm.
 
-8.5 Build for Experimentation
+---
 
-The architecture should support controlled experiments.
+## 12. Initial Release Scope
 
-Important distributed behaviors should be measurable and reproducible.
+The first implementation milestone will include:
 
-The project should make it possible to intentionally introduce failure conditions and observe how the system responds.
+- Spring Boot project foundation.
+- Core traffic-control domain model.
+- Traffic subject abstraction.
+- Traffic policy model.
+- Policy resolution abstraction.
+- One traffic-control algorithm.
+- Local traffic state.
+- Request evaluation.
+- Allow or reject decisions.
+- Basic HTTP integration.
+- Unit tests for enforcement logic.
+- Basic integration tests.
 
-9. Success Criteria for the Product Scope
+The initial release will focus on correctness, clean boundaries, and extensibility.
 
-The initial product scope will be considered successfully implemented when the system can demonstrate the following capabilities.
+Distributed coordination will not be implemented in the first milestone.
 
-9.1 Policy Definition
+---
 
-Traffic-control policies can be created, updated, retrieved, and versioned.
+## 13. Future Scope
 
-9.2 Local Enforcement
+The following capabilities are planned for later phases.
 
-A gateway can make local allow or reject decisions based on an applicable traffic policy.
+### 13.1 Distributed Gateway Deployment
 
-9.3 Multiple Gateway Support
+- Multiple gateway instances.
+- Shared traffic policies.
+- Load-balanced request processing.
+- Demonstration of the global quota problem.
 
-Multiple gateway nodes can independently process traffic.
+### 13.2 Control Plane
 
-9.4 Shared Quota Coordination
+- Centralized policy management.
+- Gateway registration.
+- Gateway membership awareness.
+- Coordination APIs.
 
-Adding gateway nodes does not simply multiply a configured shared global quota.
+### 13.3 Distributed Capacity Allocation
 
-9.5 Bounded Capacity
+- Global quota management.
+- Gateway capacity allocation.
+- Capacity leases.
+- Allocation renewal.
+- Allocation expiration.
+- Capacity recovery.
 
-Gateway nodes operate with bounded traffic capacity rather than independently assuming ownership of the complete global quota.
+### 13.4 Policy Distribution
 
-9.6 Coordinated Capacity Renewal
+- Versioned policies.
+- Policy propagation.
+- Stale policy detection.
+- Gateway synchronization.
 
-Gateway nodes can coordinate with the control plane when additional capacity is required.
+### 13.5 Failure Recovery
 
-9.7 Lease Lifecycle
+- Gateway failure detection.
+- Lease expiration.
+- Capacity reclamation.
+- Control-plane failure handling.
+- Network partition behavior.
+- Recovery procedures.
 
-The system defines and demonstrates lease creation, renewal, expiration, and reclamation behavior.
+### 13.6 Adaptive Traffic Control
 
-9.8 Policy Propagation
+- Demand-aware allocation.
+- Dynamic quota redistribution.
+- Gateway load awareness.
+- Hot-client detection.
 
-Gateway nodes can receive updated policy information and identify policy versions.
+### 13.7 Deployment and Testing
 
-9.9 Defined Failure Behavior
+- Docker-based local deployment.
+- Multiple gateway replicas.
+- Container orchestration.
+- Kubernetes deployment.
+- Load testing.
+- Failure simulation.
 
-The system provides explicit behavior for selected gateway, control-plane, and communication failures.
+---
 
-9.10 Operational Visibility
+## 14. Out of Scope
 
-The system exposes enough information to understand request decisions, capacity allocation, gateway state, lease state, and coordination failures.
+The following capabilities are explicitly outside the initial product scope:
 
-9.11 Reproducible Experiments
+- Complete API gateway functionality.
+- API monetization.
+- Billing systems.
+- Subscription management.
+- Authentication provider implementation.
+- Web application firewall functionality.
+- DDoS protection.
+- Full API management capabilities.
+- Service mesh implementation.
+- Multi-region traffic coordination.
+- Production user interface or dashboard.
 
-The distributed architecture can be tested through reproducible scenarios involving multiple gateway nodes and selected failure conditions.
+The platform may integrate with some of these systems in the future, but they are not the purpose of this project.
 
-10. Summary
+---
 
-distributed-traffic-control is scoped as a distributed platform for enforcing shared API traffic-control policies across multiple independently operating gateway nodes.
+## 15. Product Boundaries
 
-The project begins with a local traffic-control foundation but is intentionally designed to evolve into a distributed control-plane and data-plane architecture.
+Distributed Traffic Control is a specialized traffic-policy enforcement and coordination platform.
 
-The primary scope includes traffic-policy management, local request enforcement, algorithm abstraction, multiple gateway nodes, shared global quotas, bounded capacity allocation, lease management, policy versioning, gateway coordination, observability, and distributed-system experiments.
+It is not intended to become a complete API gateway.
 
-The project intentionally excludes unrelated API-management features, unnecessary microservice decomposition, advanced authentication systems, multi-region deployment, AI-driven traffic decisions, and other capabilities that do not directly contribute to the central engineering problem.
+It is not intended to replace existing API management platforms.
 
-The central product objective remains:
+It is not intended to provide complete application security.
 
-Enable low-latency local traffic-control decisions across a distributed gateway fleet while maintaining coordinated and bounded enforcement of shared global API policies.
+The primary technical focus of the project is:
 
-The scope defined in this document provides the boundary for the subsequent functional requirements, non-functional requirements, system architecture, data model, coordination protocol, API contracts, implementation phases, and distributed-system experiments.
+- Local traffic enforcement.
+- Distributed coordination.
+- Global quota management.
+- Capacity allocation.
+- Policy propagation.
+- Consistency.
+- Failure handling.
+- Scalability.
+- Observability.
+
+These boundaries are important to prevent unnecessary expansion of the project.
+
+---
+
+## 16. Product Evolution
+
+The product will evolve in progressive stages.
+
+### Stage 1: Local Traffic Control
+
+Implement local traffic-policy evaluation and local capacity enforcement.
+
+The objective is to establish a correct and independently testable traffic-control domain.
+
+### Stage 2: Request-Path Integration
+
+Integrate the traffic-control engine into a realistic request-processing flow.
+
+The objective is to demonstrate how traffic decisions affect incoming API requests.
+
+### Stage 3: Distributed Gateway Deployment
+
+Introduce multiple gateway instances.
+
+The objective is to reproduce the coordination problem created by independently enforced local limits.
+
+### Stage 4: Control Plane
+
+Introduce a dedicated control-plane component.
+
+The objective is to separate traffic coordination from request processing.
+
+### Stage 5: Distributed Capacity Allocation
+
+Introduce globally coordinated capacity allocations.
+
+The objective is to allow gateway nodes to enforce traffic locally while respecting a shared global quota.
+
+### Stage 6: Failure Handling
+
+Introduce allocation expiration, recovery, stale-state handling, and gateway failure scenarios.
+
+The objective is to make the distributed architecture resilient to partial failures.
+
+### Stage 7: Adaptive Allocation
+
+Introduce dynamic capacity redistribution based on observed traffic demand.
+
+The objective is to improve capacity utilization while preserving traffic-control guarantees.
+
+---
+
+## 17. Scope Summary
+
+The initial product will establish a clean foundation for local traffic-control enforcement.
+
+It will support traffic policies, traffic subject identification, policy resolution, algorithm abstraction, local capacity evaluation, and request decisions.
+
+The platform will then evolve into a distributed traffic-control system where multiple gateway nodes enforce globally defined traffic policies through coordinated capacity allocation and locally executed decisions.
+
+The guiding architectural principle of the project is:
+
+> Keep request-path enforcement local whenever possible and move distributed coordination outside the critical request path.
+
+This principle will guide the evolution of the project from a local traffic-control engine into a distributed control-plane and data-plane architecture.
