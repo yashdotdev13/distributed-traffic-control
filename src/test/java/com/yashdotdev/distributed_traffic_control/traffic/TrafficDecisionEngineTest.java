@@ -243,6 +243,69 @@ class TrafficDecisionEngineTest {
         assertTrue(thirdDecision.isAllowed());
     }
 
+    @Test
+    void shouldNotRefillQuotaBeyondMaximumCapacity() {
+
+        MutableClock clock = new MutableClock(
+                Instant.parse("2026-08-28T10:00:00Z")
+        );
+
+        int capacity = 5;
+
+        TrafficPolicy policy = new TrafficPolicy(
+                "capacity-policy",
+                "Capacity Traffic Policy",
+                TrafficPolicyType.TOKEN_BUCKET,
+                PolicyStatus.ACTIVE,
+                capacity,
+                2,
+                Instant.now(clock)
+        );
+
+        TrafficDecisionEngine trafficDecisionEngine =
+                new TrafficDecisionEngine(
+                        new InMemoryPolicyProvider(policy),
+                        new InMemoryQuotaCoordinator(clock)
+                );
+
+        TrafficRequest request = new TrafficRequest(
+                "request-1",
+                new TrafficSubject(
+                        "user-123",
+                        TrafficSubjectType.USER
+                ),
+                "/api/orders",
+                Instant.now(clock)
+        );
+
+        for (int i = 0; i < capacity; i++) {
+            TrafficDecision decision =
+                    trafficDecisionEngine.evaluate(request);
+
+            assertTrue(decision.isAllowed());
+        }
+
+        TrafficDecision exhaustedDecision =
+                trafficDecisionEngine.evaluate(request);
+
+        assertFalse(exhaustedDecision.isAllowed());
+
+        clock.advanceSeconds(10);
+
+        int allowedRequests = 0;
+
+        for (int i = 0; i < capacity + 1; i++) {
+            TrafficDecision decision =
+                    trafficDecisionEngine.evaluate(request);
+
+            if (decision.isAllowed()) {
+                allowedRequests++;
+            }
+        }
+
+        assertEquals(capacity, allowedRequests);
+    }
+
     private static class MutableClock extends Clock {
 
         private Instant currentTime;
