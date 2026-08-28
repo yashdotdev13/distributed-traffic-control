@@ -1,8 +1,10 @@
 package com.yashdotdev.distributed_traffic_control.quota;
 
+import com.yashdotdev.distributed_traffic_control.allocation.TokenBucketAlgorithm;
+import com.yashdotdev.distributed_traffic_control.allocation.TrafficControlAlgorithm;
+import com.yashdotdev.distributed_traffic_control.policy.TrafficPolicy;
+
 import java.time.Clock;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -12,18 +14,22 @@ public class InMemoryQuotaCoordinator implements QuotaCoordinator {
 
     private final Clock clock;
 
+    private final TrafficControlAlgorithm trafficControlAlgorithm;
+
     public InMemoryQuotaCoordinator() {
         this(Clock.systemUTC());
     }
-    public InMemoryQuotaCoordinator(Clock clock){
+
+    public InMemoryQuotaCoordinator(Clock clock) {
         this.clock = clock;
+        this.trafficControlAlgorithm =
+                new TokenBucketAlgorithm(clock);
     }
 
     @Override
     public QuotaConsumptionResult tryConsume(
             QuotaKey quotaKey,
-            long capacity,
-            long refillRate
+            TrafficPolicy policy
     ) {
         String key = buildKey(quotaKey);
 
@@ -31,49 +37,18 @@ public class InMemoryQuotaCoordinator implements QuotaCoordinator {
                 key,
                 ignored -> new Quota(
                         quotaKey,
-                        capacity,
-                        capacity,
+                        policy.getCapacity(),
+                        policy.getCapacity(),
                         clock.instant()
                 )
         );
 
         synchronized (quota) {
-            refillQuota(quota, refillRate);
-
-            if (!quota.hasAvailableCapacity()) {
-                return new QuotaConsumptionResult(
-                        false,
-                        quota.getAvailableCapacity()
-                );
-            }
-
-            quota.consume();
-
-            return new QuotaConsumptionResult(
-                    true,
-                    quota.getAvailableCapacity()
+            return trafficControlAlgorithm.tryConsume(
+                    quota,
+                    policy
             );
         }
-    }
-
-    private void refillQuota(
-            Quota quota,
-            long refillRate
-    ) {
-        Instant now = clock.instant();
-
-        long elapsedSeconds = Duration.between(
-                quota.getLastRefilledAt(),
-                now
-        ).getSeconds();
-
-        if (elapsedSeconds <= 0) {
-            return;
-        }
-
-        long tokensToAdd = elapsedSeconds * refillRate;
-
-        quota.refill(tokensToAdd, now);
     }
 
     private String buildKey(QuotaKey quotaKey) {

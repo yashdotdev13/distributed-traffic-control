@@ -1,6 +1,5 @@
 package com.yashdotdev.distributed_traffic_control.traffic;
 
-
 import com.yashdotdev.distributed_traffic_control.policy.PolicyProvider;
 import com.yashdotdev.distributed_traffic_control.policy.TrafficPolicy;
 import com.yashdotdev.distributed_traffic_control.quota.QuotaConsumptionResult;
@@ -28,6 +27,7 @@ public class TrafficDecisionEngine {
                     0
             );
         }
+
         TrafficPolicy trafficPolicy = policy.get();
 
         if (!trafficPolicy.isActive()) {
@@ -47,8 +47,7 @@ public class TrafficDecisionEngine {
         QuotaConsumptionResult consumptionResult =
                 quotaCoordinator.tryConsume(
                         quotaKey,
-                        trafficPolicy.getCapacity(),
-                        trafficPolicy.getRefillRate()
+                        trafficPolicy
                 );
 
         if (!consumptionResult.isConsumed()) {
