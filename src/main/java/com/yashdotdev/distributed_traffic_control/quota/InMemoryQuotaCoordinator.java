@@ -1,8 +1,11 @@
 package com.yashdotdev.distributed_traffic_control.quota;
 
+import com.yashdotdev.distributed_traffic_control.allocation.InMemoryTrafficControlAlgorithmResolver;
 import com.yashdotdev.distributed_traffic_control.allocation.TokenBucketAlgorithm;
 import com.yashdotdev.distributed_traffic_control.allocation.TrafficControlAlgorithm;
+import com.yashdotdev.distributed_traffic_control.allocation.TrafficControlAlgorithmResolver;
 import com.yashdotdev.distributed_traffic_control.policy.TrafficPolicy;
+import com.yashdotdev.distributed_traffic_control.policy.TrafficPolicyType;
 
 import java.time.Clock;
 import java.util.Map;
@@ -11,10 +14,8 @@ import java.util.concurrent.ConcurrentHashMap;
 public class InMemoryQuotaCoordinator implements QuotaCoordinator {
 
     private final Map<String, Quota> quotas = new ConcurrentHashMap<>();
-
     private final Clock clock;
-
-    private final TrafficControlAlgorithm trafficControlAlgorithm;
+    private final TrafficControlAlgorithmResolver algorithmResolver;
 
     public InMemoryQuotaCoordinator() {
         this(Clock.systemUTC());
@@ -22,8 +23,17 @@ public class InMemoryQuotaCoordinator implements QuotaCoordinator {
 
     public InMemoryQuotaCoordinator(Clock clock) {
         this.clock = clock;
-        this.trafficControlAlgorithm =
+
+        TrafficControlAlgorithm tokenBucketAlgorithm =
                 new TokenBucketAlgorithm(clock);
+
+        this.algorithmResolver =
+                new InMemoryTrafficControlAlgorithmResolver(
+                        Map.of(
+                                TrafficPolicyType.TOKEN_BUCKET,
+                                tokenBucketAlgorithm
+                        )
+                );
     }
 
     @Override
@@ -44,7 +54,10 @@ public class InMemoryQuotaCoordinator implements QuotaCoordinator {
         );
 
         synchronized (quota) {
-            return trafficControlAlgorithm.tryConsume(
+            TrafficControlAlgorithm algorithm =
+                    algorithmResolver.resolve(policy.getType());
+
+            return algorithm.tryConsume(
                     quota,
                     policy
             );
