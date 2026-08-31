@@ -15,6 +15,9 @@ public class InMemoryLeaseCoordinator implements LeaseCoordinator {
     private final Map<String, Long> availableCapacityByQuota =
             new ConcurrentHashMap<>();
 
+    private final Map<String, QuotaLease> activeLeases =
+            new ConcurrentHashMap<>();
+
     private final Clock clock;
 
     public InMemoryLeaseCoordinator() {
@@ -58,6 +61,9 @@ public class InMemoryLeaseCoordinator implements LeaseCoordinator {
         String key = buildKey(quotaKey);
 
         synchronized (availableCapacityByQuota) {
+
+            reclaimExpiredLeases();
+
             Long availableCapacity =
                     availableCapacityByQuota.get(key);
 
@@ -82,8 +88,94 @@ public class InMemoryLeaseCoordinator implements LeaseCoordinator {
                     issuedAt.plus(leaseDuration)
             );
 
+            activeLeases.put(
+                    quotaLease.getLeaseId(),
+                    quotaLease
+            );
+
             return Optional.of(quotaLease);
         }
+    }
+
+    @Override
+    public LeaseConsumptionResult tryConsume(
+            QuotaLease lease,
+            Instant currentTime
+    ) {
+        if (lease == null) {
+            throw new IllegalArgumentException(
+                    "lease must not be null"
+            );
+        }
+
+        if (currentTime == null) {
+            throw new IllegalArgumentException(
+                    "currentTime must not be null"
+            );
+        }
+
+        synchronized (activeLeases) {
+
+            QuotaLease activeLease =
+                    activeLeases.get(lease.getLeaseId());
+
+            if (activeLease == null) {
+                return new LeaseConsumptionResult(
+                        false,
+                        0
+                );
+            }
+
+            if (activeLease.isExpired(currentTime)) {
+                return new LeaseConsumptionResult(
+                        false,
+                        activeLease.getRemainingCapacity()
+                );
+            }
+
+            if (!activeLease.hasRemainingCapacity()) {
+                return new LeaseConsumptionResult(
+                        false,
+                        0
+                );
+            }
+
+            activeLease.consume();
+
+            return new LeaseConsumptionResult(
+                    true,
+                    activeLease.getRemainingCapacity()
+            );
+        }
+    }
+    private void reclaimExpiredLeases() {
+
+        Instant currentTime = clock.instant();
+
+        activeLeases.values()
+                .removeIf(lease -> {
+
+                    if (!lease.isExpired(currentTime)) {
+                        return false;
+                    }
+
+                    long unusedCapacity =
+                            lease.getRemainingCapacity();
+
+                    if (unusedCapacity > 0) {
+                        String key = buildKey(
+                                lease.getQuotaKey()
+                        );
+
+                        availableCapacityByQuota.merge(
+                                key,
+                                unusedCapacity,
+                                Long::sum
+                        );
+                    }
+
+                    return true;
+                });
     }
 
     private void validateRequest(
@@ -110,7 +202,8 @@ public class InMemoryLeaseCoordinator implements LeaseCoordinator {
             );
         }
 
-        if (leaseDuration == null || leaseDuration.isZero()
+        if (leaseDuration == null
+                || leaseDuration.isZero()
                 || leaseDuration.isNegative()) {
             throw new IllegalArgumentException(
                     "leaseDuration must be greater than zero"

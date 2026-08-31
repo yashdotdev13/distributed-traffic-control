@@ -5,10 +5,7 @@ import com.yashdotdev.distributed_traffic_control.traffic.TrafficSubject;
 import com.yashdotdev.distributed_traffic_control.traffic.TrafficSubjectType;
 import org.junit.jupiter.api.Test;
 
-import java.time.Clock;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.ZoneOffset;
+import java.time.*;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -159,6 +156,88 @@ class InMemoryLeaseCoordinatorTest {
         );
     }
 
+    @Test
+    void shouldReclaimUnusedCapacityFromExpiredLease() {
+
+        MutableClock clock = new MutableClock(
+                Instant.parse("2026-08-28T10:00:00Z")
+        );
+
+        InMemoryLeaseCoordinator leaseCoordinator =
+                new InMemoryLeaseCoordinator(clock);
+
+        QuotaKey quotaKey = createQuotaKey();
+
+        leaseCoordinator.registerQuota(
+                quotaKey,
+                100
+        );
+
+        Optional<QuotaLease> firstLease =
+                leaseCoordinator.acquireLease(
+                        quotaKey,
+                        "node-1",
+                        60,
+                        Duration.ofSeconds(30)
+                );
+
+        assertTrue(firstLease.isPresent());
+
+        QuotaLease quotaLease = firstLease.get();
+
+        quotaLease.consume();
+        quotaLease.consume();
+
+        assertEquals(
+                58,
+                quotaLease.getRemainingCapacity()
+        );
+
+        clock.advanceSeconds(31);
+
+        Optional<QuotaLease> secondLease =
+                leaseCoordinator.acquireLease(
+                        quotaKey,
+                        "node-2",
+                        98,
+                        Duration.ofSeconds(30)
+                );
+
+        assertTrue(secondLease.isPresent());
+
+        assertEquals(
+                98,
+                secondLease.get().getAllocatedCapacity()
+        );
+    }
+
+    private static class MutableClock extends Clock {
+
+        private Instant currentTime;
+
+        private MutableClock(Instant currentTime) {
+            this.currentTime = currentTime;
+        }
+
+        @Override
+        public ZoneId getZone() {
+            return ZoneOffset.UTC;
+        }
+
+        @Override
+        public Clock withZone(ZoneId zone) {
+            return this;
+        }
+
+        @Override
+        public Instant instant() {
+            return currentTime;
+        }
+
+        public void advanceSeconds(long seconds) {
+            currentTime = currentTime.plusSeconds(seconds);
+        }
+    }
     private QuotaKey createQuotaKey() {
         return new QuotaKey(
                 "test-policy",

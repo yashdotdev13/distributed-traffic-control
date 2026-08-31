@@ -21,8 +21,6 @@ public class InMemoryTrafficControlAlgorithmResolver implements TrafficControlAl
     }
     @Override
     public TrafficControlAlgorithm resolve(TrafficPolicyType policyType) {
-
-
         TrafficControlAlgorithm algorithm = algorithms.get(policyType);
 
         if (algorithm == null) {
