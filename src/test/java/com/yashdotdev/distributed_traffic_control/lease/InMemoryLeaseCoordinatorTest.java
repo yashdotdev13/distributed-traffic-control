@@ -110,6 +110,55 @@ class InMemoryLeaseCoordinatorTest {
         assertTrue(secondLease.isEmpty());
     }
 
+
+    @Test
+    void shouldAllocateLeaseWhenRequestedCapacityEqualsRemainingCapacity() {
+
+        Clock clock = Clock.fixed(
+                Instant.parse("2026-08-28T10:00:00Z"),
+                ZoneOffset.UTC
+        );
+
+        InMemoryLeaseCoordinator leaseCoordinator =
+                new InMemoryLeaseCoordinator(clock);
+
+        QuotaKey quotaKey = createQuotaKey();
+
+        leaseCoordinator.registerQuota(
+                quotaKey,
+                100
+        );
+
+        Optional<QuotaLease> firstLease =
+                leaseCoordinator.acquireLease(
+                        quotaKey,
+                        "node-1",
+                        70,
+                        Duration.ofSeconds(60)
+                );
+
+        Optional<QuotaLease> secondLease =
+                leaseCoordinator.acquireLease(
+                        quotaKey,
+                        "node-2",
+                        30,
+                        Duration.ofSeconds(60)
+                );
+
+        assertTrue(firstLease.isPresent());
+        assertTrue(secondLease.isPresent());
+
+        assertEquals(
+                30,
+                secondLease.get().getAllocatedCapacity()
+        );
+
+        assertEquals(
+                30,
+                secondLease.get().getRemainingCapacity()
+        );
+    }
+
     private QuotaKey createQuotaKey() {
         return new QuotaKey(
                 "test-policy",

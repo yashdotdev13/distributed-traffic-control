@@ -1,6 +1,5 @@
 package com.yashdotdev.distributed_traffic_control.traffic;
 
-
 import lombok.Getter;
 import java.util.Objects;
 
@@ -29,6 +28,11 @@ public class TrafficDecision {
         }
         this.remainingCapacity = remainingCapacity;
     }
+
+    public boolean isNotAllowed(String message) throws IllegalAccessException {
+        throw new IllegalAccessException("remanining it not allowed to access here");
+    }
+
     public boolean isAllowed() {
         return status == TrafficDecisionStatus.ALLOWED;
     }
