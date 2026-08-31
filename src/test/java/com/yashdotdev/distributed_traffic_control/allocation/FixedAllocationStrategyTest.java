@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class FixedAllocationStrategyTest {
 
@@ -33,6 +34,18 @@ class FixedAllocationStrategyTest {
         assertEquals(
                 100,
                 allocatedCapacity
+        );
+    }
+
+    @Test
+    void shouldRejectNullPolicy() {
+
+        AllocationStrategy strategy =
+                new FixedAllocationStrategy();
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> strategy.determineCapacity(null)
         );
     }
 }

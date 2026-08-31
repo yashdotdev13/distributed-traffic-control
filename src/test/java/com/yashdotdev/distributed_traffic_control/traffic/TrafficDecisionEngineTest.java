@@ -1,17 +1,25 @@
 package com.yashdotdev.distributed_traffic_control.traffic;
 
+import com.yashdotdev.distributed_traffic_control.allocation.AllocationProperties;
+import com.yashdotdev.distributed_traffic_control.allocation.CapacityAllocator;
+import com.yashdotdev.distributed_traffic_control.allocation.FixedAllocationStrategy;
+import com.yashdotdev.distributed_traffic_control.allocation.InMemoryCapacityAllocator;
+import com.yashdotdev.distributed_traffic_control.lease.InMemoryLeaseCoordinator;
 import com.yashdotdev.distributed_traffic_control.policy.InMemoryPolicyProvider;
 import com.yashdotdev.distributed_traffic_control.policy.PolicyStatus;
 import com.yashdotdev.distributed_traffic_control.policy.TrafficPolicy;
 import com.yashdotdev.distributed_traffic_control.policy.TrafficPolicyType;
 import com.yashdotdev.distributed_traffic_control.quota.InMemoryQuotaCoordinator;
+import com.yashdotdev.distributed_traffic_control.quota.QuotaKey;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -35,8 +43,8 @@ class TrafficDecisionEngineTest {
         );
 
         TrafficDecisionEngine trafficDecisionEngine =
-                new TrafficDecisionEngine(
-                        new InMemoryPolicyProvider(policy),
+                createTrafficDecisionEngine(
+                        policy,
                         new InMemoryQuotaCoordinator()
                 );
 
@@ -57,7 +65,7 @@ class TrafficDecisionEngineTest {
     }
 
     @Test
-    void shouldRejectRequestWhenQuotaIsExhausted(){
+    void shouldRejectRequestWhenQuotaIsExhausted() {
 
         TrafficPolicy policy = new TrafficPolicy(
                 "default-policy",
@@ -69,10 +77,11 @@ class TrafficDecisionEngineTest {
                 Instant.now()
         );
 
-        TrafficDecisionEngine trafficDecisionEngine = new TrafficDecisionEngine(
-                new InMemoryPolicyProvider(policy),
-                new InMemoryQuotaCoordinator()
-        );
+        TrafficDecisionEngine trafficDecisionEngine =
+                createTrafficDecisionEngine(
+                        policy,
+                        new InMemoryQuotaCoordinator()
+                );
 
         TrafficRequest request = new TrafficRequest(
                 "request-1",
@@ -108,8 +117,8 @@ class TrafficDecisionEngineTest {
         );
 
         TrafficDecisionEngine trafficDecisionEngine =
-                new TrafficDecisionEngine(
-                        new InMemoryPolicyProvider(policy),
+                createTrafficDecisionEngine(
+                        policy,
                         new InMemoryQuotaCoordinator()
                 );
 
@@ -130,7 +139,8 @@ class TrafficDecisionEngineTest {
     }
 
     @Test
-    void shouldNotOverConsumeQuotaWhenRequestsAreConcurrent() throws Exception {
+    void shouldNotOverConsumeQuotaWhenRequestsAreConcurrent()
+            throws Exception {
 
         int capacity = 10;
         int numberOfRequests = 100;
@@ -146,8 +156,8 @@ class TrafficDecisionEngineTest {
         );
 
         TrafficDecisionEngine trafficDecisionEngine =
-                new TrafficDecisionEngine(
-                        new InMemoryPolicyProvider(policy),
+                createTrafficDecisionEngine(
+                        policy,
                         new InMemoryQuotaCoordinator()
                 );
 
@@ -164,9 +174,11 @@ class TrafficDecisionEngineTest {
         ExecutorService executorService =
                 Executors.newFixedThreadPool(numberOfRequests);
 
-        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch startLatch =
+                new CountDownLatch(1);
 
-        List<Future<TrafficDecision>> futures = new ArrayList<>();
+        List<Future<TrafficDecision>> futures =
+                new ArrayList<>();
 
         for (int i = 0; i < numberOfRequests; i++) {
             futures.add(
@@ -191,7 +203,11 @@ class TrafficDecisionEngineTest {
         }
 
         executorService.shutdown();
-        assertEquals(capacity, allowedRequests);
+
+        assertEquals(
+                capacity,
+                allowedRequests
+        );
     }
 
     @Test
@@ -212,8 +228,8 @@ class TrafficDecisionEngineTest {
         );
 
         TrafficDecisionEngine trafficDecisionEngine =
-                new TrafficDecisionEngine(
-                        new InMemoryPolicyProvider(policy),
+                createTrafficDecisionEngine(
+                        policy,
                         new InMemoryQuotaCoordinator(clock)
                 );
 
@@ -263,8 +279,8 @@ class TrafficDecisionEngineTest {
         );
 
         TrafficDecisionEngine trafficDecisionEngine =
-                new TrafficDecisionEngine(
-                        new InMemoryPolicyProvider(policy),
+                createTrafficDecisionEngine(
+                        policy,
                         new InMemoryQuotaCoordinator(clock)
                 );
 
@@ -279,6 +295,7 @@ class TrafficDecisionEngineTest {
         );
 
         for (int i = 0; i < capacity; i++) {
+
             TrafficDecision decision =
                     trafficDecisionEngine.evaluate(request);
 
@@ -295,6 +312,7 @@ class TrafficDecisionEngineTest {
         int allowedRequests = 0;
 
         for (int i = 0; i < capacity + 1; i++) {
+
             TrafficDecision decision =
                     trafficDecisionEngine.evaluate(request);
 
@@ -303,7 +321,109 @@ class TrafficDecisionEngineTest {
             }
         }
 
-        assertEquals(capacity, allowedRequests);
+        assertEquals(
+                capacity,
+                allowedRequests
+        );
+    }
+
+
+    @Test
+    void shouldAllowRequestWhenLocalQuotaIsExhaustedAndCapacityIsAllocated() {
+
+        TrafficPolicy policy = new TrafficPolicy(
+                "allocation-policy",
+                "Allocation Traffic Policy",
+                TrafficPolicyType.TOKEN_BUCKET,
+                PolicyStatus.ACTIVE,
+                1,
+                1,
+                Instant.parse("2026-08-28T10:00:00Z")
+        );
+
+        InMemoryQuotaCoordinator quotaCoordinator =
+                new InMemoryQuotaCoordinator();
+
+        QuotaKey quotaKey = new QuotaKey(
+                policy.getPolicyId(),
+                new TrafficSubject(
+                        "user-123",
+                        TrafficSubjectType.USER
+                ),
+                "/api/orders"
+        );
+
+        InMemoryLeaseCoordinator leaseCoordinator =
+                new InMemoryLeaseCoordinator();
+
+        leaseCoordinator.registerQuota(
+                quotaKey,
+                10
+        );
+
+        AllocationProperties allocationProperties =
+                new AllocationProperties();
+
+        allocationProperties.setNodeId("test-node");
+        allocationProperties.setLeaseDuration(
+                Duration.ofSeconds(30)
+        );
+
+        InMemoryCapacityAllocator capacityAllocator =
+                new InMemoryCapacityAllocator(
+                        leaseCoordinator,
+                        new FixedAllocationStrategy(),
+                        allocationProperties
+                );
+
+        TrafficDecisionEngine trafficDecisionEngine =
+                new TrafficDecisionEngine(
+                        new InMemoryPolicyProvider(policy),
+                        quotaCoordinator,
+                        capacityAllocator
+                );
+
+        TrafficRequest request = new TrafficRequest(
+                "request-1",
+                new TrafficSubject(
+                        "user-123",
+                        TrafficSubjectType.USER
+                ),
+                "/api/orders",
+                Instant.parse("2026-08-28T10:00:00Z")
+        );
+
+        TrafficDecision firstDecision =
+                trafficDecisionEngine.evaluate(request);
+
+        TrafficDecision secondDecision =
+                trafficDecisionEngine.evaluate(request);
+
+        assertTrue(firstDecision.isAllowed());
+
+        assertTrue(secondDecision.isAllowed());
+    }
+
+    /**
+     * Creates the decision engine for the existing local-quota tests.
+     *
+     * The allocator intentionally returns no lease because these tests
+     * verify the existing local quota behavior. The distributed
+     * capacity-allocation behavior will be tested separately.
+     */
+    private TrafficDecisionEngine createTrafficDecisionEngine(
+            TrafficPolicy policy,
+            InMemoryQuotaCoordinator quotaCoordinator
+    ) {
+
+        CapacityAllocator noOpCapacityAllocator =
+                (trafficPolicy, quotaKey) -> Optional.empty();
+
+        return new TrafficDecisionEngine(
+                new InMemoryPolicyProvider(policy),
+                quotaCoordinator,
+                noOpCapacityAllocator
+        );
     }
 
     private static class MutableClock extends Clock {
@@ -313,20 +433,25 @@ class TrafficDecisionEngineTest {
         private MutableClock(Instant currentTime) {
             this.currentTime = currentTime;
         }
+
         @Override
         public ZoneId getZone() {
             return ZoneId.of("UTC");
         }
+
         @Override
         public Clock withZone(ZoneId zone) {
             return this;
         }
+
         @Override
         public Instant instant() {
             return currentTime;
         }
+
         public void advanceSeconds(long seconds) {
-            currentTime = currentTime.plusSeconds(seconds);
+            currentTime =
+                    currentTime.plusSeconds(seconds);
         }
     }
 }

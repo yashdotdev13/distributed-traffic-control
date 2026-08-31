@@ -1,10 +1,12 @@
 package com.yashdotdev.distributed_traffic_control.traffic;
 
+import com.yashdotdev.distributed_traffic_control.allocation.CapacityAllocator;
 import com.yashdotdev.distributed_traffic_control.policy.PolicyProvider;
 import com.yashdotdev.distributed_traffic_control.policy.TrafficPolicy;
 import com.yashdotdev.distributed_traffic_control.quota.QuotaConsumptionResult;
 import com.yashdotdev.distributed_traffic_control.quota.QuotaCoordinator;
 import com.yashdotdev.distributed_traffic_control.quota.QuotaKey;
+import com.yashdotdev.distributed_traffic_control.lease.QuotaLease;
 import lombok.RequiredArgsConstructor;
 
 import java.util.Optional;
@@ -14,6 +16,7 @@ public class TrafficDecisionEngine {
 
     private final PolicyProvider policyProvider;
     private final QuotaCoordinator quotaCoordinator;
+    private final CapacityAllocator capacityAllocator;
 
     public TrafficDecision evaluate(TrafficRequest request) {
 
@@ -50,7 +53,21 @@ public class TrafficDecisionEngine {
                         trafficPolicy
                 );
 
-        if (!consumptionResult.isConsumed()) {
+        if (consumptionResult.isConsumed()) {
+            return new TrafficDecision(
+                    TrafficDecisionStatus.ALLOWED,
+                    "Request allowed",
+                    consumptionResult.getRemainingCapacity()
+            );
+        }
+
+        Optional<QuotaLease> lease =
+                capacityAllocator.allocate(
+                        trafficPolicy,
+                        quotaKey
+                );
+
+        if (lease.isEmpty()) {
             return new TrafficDecision(
                     TrafficDecisionStatus.REJECTED,
                     "Traffic quota exhausted",
@@ -61,7 +78,7 @@ public class TrafficDecisionEngine {
         return new TrafficDecision(
                 TrafficDecisionStatus.ALLOWED,
                 "Request allowed",
-                consumptionResult.getRemainingCapacity()
+                lease.get().getRemainingCapacity()
         );
     }
 }
