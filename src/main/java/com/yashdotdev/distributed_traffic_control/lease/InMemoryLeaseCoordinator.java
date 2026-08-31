@@ -148,6 +148,52 @@ public class InMemoryLeaseCoordinator implements LeaseCoordinator {
             );
         }
     }
+
+    @Override
+    public boolean releaseLease(
+            QuotaLease lease
+    ) {
+        if (lease == null) {
+            throw new IllegalArgumentException(
+                    "lease must not be null"
+            );
+        }
+
+        synchronized (activeLeases) {
+
+            QuotaLease activeLease =
+                    activeLeases.remove(
+                            lease.getLeaseId()
+                    );
+
+            if (activeLease == null) {
+                return false;
+            }
+
+            Instant currentTime = clock.instant();
+
+            if (activeLease.isExpired(currentTime)) {
+                return false;
+            }
+
+            long remainingCapacity =
+                    activeLease.getRemainingCapacity();
+
+            if (remainingCapacity > 0) {
+                String key = buildKey(
+                        activeLease.getQuotaKey()
+                );
+
+                availableCapacityByQuota.merge(
+                        key,
+                        remainingCapacity,
+                        Long::sum
+                );
+            }
+
+            return true;
+        }
+    }
     private void reclaimExpiredLeases() {
 
         Instant currentTime = clock.instant();

@@ -21,4 +21,6 @@ public interface LeaseCoordinator {
     );
 
     boolean renewLease(QuotaLease lease, Duration extension);
+
+    boolean releaseLease(QuotaLease lease);
 }

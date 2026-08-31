@@ -477,6 +477,212 @@ class InMemoryLeaseCoordinatorTest {
                 quotaLease.getExpiresAt()
         );
     }
+
+    @Test
+    void shouldNotReclaimRenewedLeaseBeforeNewExpiration() {
+
+        MutableClock clock = new MutableClock(
+                Instant.parse("2026-08-28T10:00:00Z")
+        );
+
+        InMemoryLeaseCoordinator leaseCoordinator =
+                new InMemoryLeaseCoordinator(clock);
+
+        QuotaKey quotaKey = createQuotaKey();
+
+        leaseCoordinator.registerQuota(
+                quotaKey,
+                100
+        );
+
+        Optional<QuotaLease> lease =
+                leaseCoordinator.acquireLease(
+                        quotaKey,
+                        "node-1",
+                        60,
+                        Duration.ofSeconds(30)
+                );
+
+        assertTrue(lease.isPresent());
+
+        QuotaLease quotaLease = lease.get();
+
+        clock.advanceSeconds(20);
+
+        boolean renewed =
+                leaseCoordinator.renewLease(
+                        quotaLease,
+                        Duration.ofSeconds(30)
+                );
+
+        assertTrue(renewed);
+
+        assertEquals(
+                Instant.parse("2026-08-28T10:01:00Z"),
+                quotaLease.getExpiresAt()
+        );
+
+        clock.advanceSeconds(15);
+
+        Optional<QuotaLease> secondLease =
+                leaseCoordinator.acquireLease(
+                        quotaKey,
+                        "node-2",
+                        41,
+                        Duration.ofSeconds(30)
+                );
+
+        assertTrue(secondLease.isEmpty());
+    }
+
+
+    @Test
+    void shouldReleaseUnusedCapacityFromActiveLease() {
+
+        Clock clock = Clock.fixed(
+                Instant.parse("2026-08-28T10:00:00Z"),
+                ZoneOffset.UTC
+        );
+
+        InMemoryLeaseCoordinator leaseCoordinator =
+                new InMemoryLeaseCoordinator(clock);
+
+        QuotaKey quotaKey = createQuotaKey();
+
+        leaseCoordinator.registerQuota(
+                quotaKey,
+                100
+        );
+
+        Optional<QuotaLease> lease =
+                leaseCoordinator.acquireLease(
+                        quotaKey,
+                        "node-1",
+                        60,
+                        Duration.ofSeconds(60)
+                );
+
+        assertTrue(lease.isPresent());
+
+        QuotaLease quotaLease = lease.get();
+
+        LeaseConsumptionResult firstResult =
+                leaseCoordinator.tryConsume(
+                        quotaLease,
+                        clock.instant()
+                );
+
+        LeaseConsumptionResult secondResult =
+                leaseCoordinator.tryConsume(
+                        quotaLease,
+                        clock.instant()
+                );
+
+        assertTrue(firstResult.isConsumed());
+        assertTrue(secondResult.isConsumed());
+        assertEquals(58, secondResult.getRemainingCapacity());
+
+        boolean released =
+                leaseCoordinator.releaseLease(quotaLease);
+
+        assertTrue(released);
+
+        Optional<QuotaLease> secondLease =
+                leaseCoordinator.acquireLease(
+                        quotaKey,
+                        "node-2",
+                        98,
+                        Duration.ofSeconds(60)
+                );
+
+        assertTrue(secondLease.isPresent());
+        assertEquals(
+                98,
+                secondLease.get().getAllocatedCapacity()
+        );
+    }
+
+    @Test
+    void shouldNotReleaseLeaseMoreThanOnce() {
+
+        Clock clock = Clock.fixed(
+                Instant.parse("2026-08-28T10:00:00Z"),
+                ZoneOffset.UTC
+        );
+
+        InMemoryLeaseCoordinator leaseCoordinator =
+                new InMemoryLeaseCoordinator(clock);
+
+        QuotaKey quotaKey = createQuotaKey();
+
+        leaseCoordinator.registerQuota(
+                quotaKey,
+                100
+        );
+
+        Optional<QuotaLease> lease =
+                leaseCoordinator.acquireLease(
+                        quotaKey,
+                        "node-1",
+                        60,
+                        Duration.ofSeconds(60)
+                );
+
+        assertTrue(lease.isPresent());
+
+        QuotaLease quotaLease = lease.get();
+
+        assertTrue(
+                leaseCoordinator.releaseLease(quotaLease)
+        );
+
+        assertFalse(
+                leaseCoordinator.releaseLease(quotaLease)
+        );
+    }
+
+    @Test
+    void shouldNotConsumeReleasedLease() {
+
+        Clock clock = Clock.fixed(
+                Instant.parse("2026-08-28T10:00:00Z"),
+                ZoneOffset.UTC
+        );
+
+        InMemoryLeaseCoordinator leaseCoordinator =
+                new InMemoryLeaseCoordinator(clock);
+
+        QuotaKey quotaKey = createQuotaKey();
+
+        leaseCoordinator.registerQuota(
+                quotaKey,
+                100
+        );
+
+        Optional<QuotaLease> lease =
+                leaseCoordinator.acquireLease(
+                        quotaKey,
+                        "node-1",
+                        20,
+                        Duration.ofSeconds(60)
+                );
+
+        assertTrue(lease.isPresent());
+
+        QuotaLease quotaLease = lease.get();
+
+        assertTrue(
+                leaseCoordinator.releaseLease(quotaLease)
+        );
+
+        LeaseConsumptionResult result =
+                leaseCoordinator.tryConsume(
+                        quotaLease,
+                        clock.instant()
+                );
+
+        assertFalse(result.isConsumed());
+    }
     private QuotaKey createQuotaKey() {
         return new QuotaKey(
                 "test-policy",
