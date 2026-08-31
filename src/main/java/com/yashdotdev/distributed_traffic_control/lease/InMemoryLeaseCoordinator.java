@@ -100,11 +100,18 @@ public class InMemoryLeaseCoordinator implements LeaseCoordinator {
     @Override
     public LeaseConsumptionResult tryConsume(
             QuotaLease lease,
+            String nodeId,
             Instant currentTime
     ) {
         if (lease == null) {
             throw new IllegalArgumentException(
                     "lease must not be null"
+            );
+        }
+
+        if (nodeId == null || nodeId.isBlank()) {
+            throw new IllegalArgumentException(
+                    "nodeId must not be null or blank"
             );
         }
 
@@ -123,6 +130,13 @@ public class InMemoryLeaseCoordinator implements LeaseCoordinator {
                 return new LeaseConsumptionResult(
                         false,
                         0
+                );
+            }
+
+            if (!activeLease.getNodeId().equals(nodeId)) {
+                return new LeaseConsumptionResult(
+                        false,
+                        activeLease.getRemainingCapacity()
                 );
             }
 
@@ -226,11 +240,18 @@ public class InMemoryLeaseCoordinator implements LeaseCoordinator {
     @Override
     public boolean renewLease(
             QuotaLease lease,
+            String nodeId,
             Duration extension
     ) {
         if (lease == null) {
             throw new IllegalArgumentException(
                     "lease must not be null"
+            );
+        }
+
+        if (nodeId == null || nodeId.isBlank()) {
+            throw new IllegalArgumentException(
+                    "nodeId must not be null or blank"
             );
         }
 
@@ -248,6 +269,10 @@ public class InMemoryLeaseCoordinator implements LeaseCoordinator {
                     activeLeases.get(lease.getLeaseId());
 
             if (activeLease == null) {
+                return false;
+            }
+
+            if (!activeLease.getNodeId().equals(nodeId)) {
                 return false;
             }
 

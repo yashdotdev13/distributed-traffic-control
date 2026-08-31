@@ -17,10 +17,15 @@ public interface LeaseCoordinator {
 
     LeaseConsumptionResult tryConsume(
             QuotaLease lease,
+            String nodeId,
             Instant currentTime
     );
 
-    boolean renewLease(QuotaLease lease, Duration extension);
+    boolean renewLease(
+            QuotaLease lease,
+            String nodeId,
+            Duration extension
+    );
 
     boolean releaseLease(QuotaLease lease);
 }

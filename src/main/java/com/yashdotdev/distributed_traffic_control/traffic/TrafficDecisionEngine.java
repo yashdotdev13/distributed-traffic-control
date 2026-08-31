@@ -1,6 +1,7 @@
 package com.yashdotdev.distributed_traffic_control.traffic;
 
 import com.yashdotdev.distributed_traffic_control.allocation.CapacityAllocator;
+import com.yashdotdev.distributed_traffic_control.lease.LeaseConsumptionResult;
 import com.yashdotdev.distributed_traffic_control.policy.PolicyProvider;
 import com.yashdotdev.distributed_traffic_control.policy.TrafficPolicy;
 import com.yashdotdev.distributed_traffic_control.quota.QuotaConsumptionResult;
@@ -75,10 +76,24 @@ public class TrafficDecisionEngine {
             );
         }
 
+        LeaseConsumptionResult leaseConsumptionResult =
+                capacityAllocator.tryConsume(
+                        lease.get(),
+                        request.getRequestedAt()
+                );
+
+        if (!leaseConsumptionResult.isConsumed()) {
+            return new TrafficDecision(
+                    TrafficDecisionStatus.REJECTED,
+                    "Traffic quota exhausted",
+                    leaseConsumptionResult.getRemainingCapacity()
+            );
+        }
+
         return new TrafficDecision(
                 TrafficDecisionStatus.ALLOWED,
                 "Request allowed",
-                lease.get().getRemainingCapacity()
+                leaseConsumptionResult.getRemainingCapacity()
         );
     }
 }
