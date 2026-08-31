@@ -3,6 +3,7 @@ package com.yashdotdev.distributed_traffic_control.lease;
 import com.yashdotdev.distributed_traffic_control.quota.QuotaKey;
 import lombok.Getter;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 
@@ -15,7 +16,7 @@ public class QuotaLease {
     private final long allocatedCapacity;
     private long remainingCapacity;
     private final Instant issuedAt;
-    private final Instant expiresAt;
+    private Instant expiresAt;
 
     public QuotaLease(
             String leaseId,
@@ -90,5 +91,18 @@ public class QuotaLease {
             );
         }
         remainingCapacity--;
+    }
+
+    public void renew(Duration extension) {
+
+        if (extension == null
+                || extension.isZero()
+                || extension.isNegative()) {
+            throw new IllegalArgumentException(
+                    "extension must be greater than zero"
+            );
+        }
+
+        expiresAt = expiresAt.plus(extension);
     }
 }

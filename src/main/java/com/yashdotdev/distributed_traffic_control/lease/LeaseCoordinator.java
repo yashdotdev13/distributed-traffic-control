@@ -19,4 +19,6 @@ public interface LeaseCoordinator {
             QuotaLease lease,
             Instant currentTime
     );
+
+    boolean renewLease(QuotaLease lease, Duration extension);
 }
