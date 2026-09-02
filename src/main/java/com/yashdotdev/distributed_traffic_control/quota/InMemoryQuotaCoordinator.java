@@ -6,6 +6,7 @@ import com.yashdotdev.distributed_traffic_control.allocation.TrafficControlAlgor
 import com.yashdotdev.distributed_traffic_control.policy.TrafficPolicy;
 import com.yashdotdev.distributed_traffic_control.policy.TrafficPolicyType;
 import com.yashdotdev.distributed_traffic_control.traffic.algorithm.FixedWindowTrafficControlAlgorithm;
+import com.yashdotdev.distributed_traffic_control.traffic.algorithm.SlidingWindowTrafficControlAlgorithm;
 import com.yashdotdev.distributed_traffic_control.traffic.algorithm.TokenBucketTrafficControlAlgorithm;
 import com.yashdotdev.distributed_traffic_control.traffic.algorithm.TrafficControlAlgorithm;
 
@@ -37,13 +38,18 @@ public class InMemoryQuotaCoordinator implements QuotaCoordinator {
         TrafficControlAlgorithm fixedWindowAlgorithm =
                 new FixedWindowTrafficControlAlgorithm(clock);
 
+        TrafficControlAlgorithm slidingWindowAlgorithm =
+                new SlidingWindowTrafficControlAlgorithm(clock);
+
         this.algorithmResolver =
                 new InMemoryTrafficControlAlgorithmResolver(
                         Map.of(
                                 TrafficPolicyType.TOKEN_BUCKET,
                                 tokenBucketAlgorithm,
                                 TrafficPolicyType.FIXED_WINDOW,
-                                fixedWindowAlgorithm
+                                fixedWindowAlgorithm,
+                                TrafficPolicyType.SLIDING_WINDOW,
+                                slidingWindowAlgorithm
                         )
                 );
     }
