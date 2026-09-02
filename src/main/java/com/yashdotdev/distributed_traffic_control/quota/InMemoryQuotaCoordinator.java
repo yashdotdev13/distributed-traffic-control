@@ -5,6 +5,7 @@ import com.yashdotdev.distributed_traffic_control.allocation.TokenBucketAlgorith
 import com.yashdotdev.distributed_traffic_control.allocation.TrafficControlAlgorithmResolver;
 import com.yashdotdev.distributed_traffic_control.policy.TrafficPolicy;
 import com.yashdotdev.distributed_traffic_control.policy.TrafficPolicyType;
+import com.yashdotdev.distributed_traffic_control.traffic.algorithm.TokenBucketTrafficControlAlgorithm;
 import com.yashdotdev.distributed_traffic_control.traffic.algorithm.TrafficControlAlgorithm;
 
 import java.time.Clock;
@@ -31,7 +32,7 @@ public class InMemoryQuotaCoordinator implements QuotaCoordinator {
         this.clock = clock;
 
         TrafficControlAlgorithm tokenBucketAlgorithm =
-                new TokenBucketAlgorithm(clock);
+                new TokenBucketTrafficControlAlgorithm(clock);
 
         this.algorithmResolver =
                 new InMemoryTrafficControlAlgorithmResolver(
