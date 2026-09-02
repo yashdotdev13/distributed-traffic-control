@@ -2,10 +2,10 @@ package com.yashdotdev.distributed_traffic_control.quota;
 
 import com.yashdotdev.distributed_traffic_control.allocation.InMemoryTrafficControlAlgorithmResolver;
 import com.yashdotdev.distributed_traffic_control.allocation.TokenBucketAlgorithm;
-import com.yashdotdev.distributed_traffic_control.allocation.TrafficControlAlgorithm;
 import com.yashdotdev.distributed_traffic_control.allocation.TrafficControlAlgorithmResolver;
 import com.yashdotdev.distributed_traffic_control.policy.TrafficPolicy;
 import com.yashdotdev.distributed_traffic_control.policy.TrafficPolicyType;
+import com.yashdotdev.distributed_traffic_control.traffic.algorithm.TrafficControlAlgorithm;
 
 import java.time.Clock;
 import java.util.Map;
@@ -13,15 +13,21 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class InMemoryQuotaCoordinator implements QuotaCoordinator {
 
-    private final Map<String, Quota> quotas = new ConcurrentHashMap<>();
+    private final Map<String, Quota> quotas =
+            new ConcurrentHashMap<>();
+
     private final Clock clock;
+
     private final TrafficControlAlgorithmResolver algorithmResolver;
+
 
     public InMemoryQuotaCoordinator() {
         this(Clock.systemUTC());
     }
 
+
     public InMemoryQuotaCoordinator(Clock clock) {
+
         this.clock = clock;
 
         TrafficControlAlgorithm tokenBucketAlgorithm =
@@ -36,11 +42,13 @@ public class InMemoryQuotaCoordinator implements QuotaCoordinator {
                 );
     }
 
+
     @Override
     public QuotaConsumptionResult tryConsume(
             QuotaKey quotaKey,
             TrafficPolicy policy
     ) {
+
         String key = buildKey(quotaKey);
 
         Quota quota = quotas.computeIfAbsent(
@@ -54,8 +62,11 @@ public class InMemoryQuotaCoordinator implements QuotaCoordinator {
         );
 
         synchronized (quota) {
+
             TrafficControlAlgorithm algorithm =
-                    algorithmResolver.resolve(policy.getType());
+                    algorithmResolver.resolve(
+                            policy.getType()
+                    );
 
             return algorithm.tryConsume(
                     quota,
@@ -64,12 +75,19 @@ public class InMemoryQuotaCoordinator implements QuotaCoordinator {
         }
     }
 
-    private String buildKey(QuotaKey quotaKey) {
+
+    private String buildKey(
+            QuotaKey quotaKey
+    ) {
+
         return String.join(
                 ":",
                 quotaKey.getPolicyId(),
-                quotaKey.getSubject().getType().name(),
-                quotaKey.getSubject().getSubjectId(),
+                quotaKey.getSubject()
+                        .getType()
+                        .name(),
+                quotaKey.getSubject()
+                        .getSubjectId(),
                 quotaKey.getResources()
         );
     }

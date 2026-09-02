@@ -1,6 +1,7 @@
 package com.yashdotdev.distributed_traffic_control.allocation;
 
 import com.yashdotdev.distributed_traffic_control.policy.TrafficPolicyType;
+import com.yashdotdev.distributed_traffic_control.traffic.algorithm.TrafficControlAlgorithm;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;

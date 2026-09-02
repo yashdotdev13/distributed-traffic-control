@@ -1,11 +1,13 @@
 package com.yashdotdev.distributed_traffic_control.allocation;
 
 import com.yashdotdev.distributed_traffic_control.policy.TrafficPolicyType;
+import com.yashdotdev.distributed_traffic_control.traffic.algorithm.TrafficControlAlgorithm;
 
 import java.util.Map;
 import java.util.Objects;
 
-public class InMemoryTrafficControlAlgorithmResolver implements TrafficControlAlgorithmResolver{
+public class InMemoryTrafficControlAlgorithmResolver
+        implements TrafficControlAlgorithmResolver {
 
     private final Map<TrafficPolicyType, TrafficControlAlgorithm> algorithms;
 
@@ -19,9 +21,13 @@ public class InMemoryTrafficControlAlgorithmResolver implements TrafficControlAl
                 )
         );
     }
+
     @Override
-    public TrafficControlAlgorithm resolve(TrafficPolicyType policyType) {
-        TrafficControlAlgorithm algorithm = algorithms.get(policyType);
+    public TrafficControlAlgorithm resolve(
+            TrafficPolicyType policyType
+    ) {
+        TrafficControlAlgorithm algorithm =
+                algorithms.get(policyType);
 
         if (algorithm == null) {
             throw new IllegalArgumentException(
