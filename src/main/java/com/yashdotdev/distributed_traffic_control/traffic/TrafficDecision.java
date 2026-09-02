@@ -28,11 +28,6 @@ public class TrafficDecision {
         }
         this.remainingCapacity = remainingCapacity;
     }
-
-    public boolean isNotAllowed(String message) throws IllegalAccessException {
-        throw new IllegalAccessException("remanining it not allowed to access here");
-    }
-
     public boolean isAllowed() {
         return status == TrafficDecisionStatus.ALLOWED;
     }
