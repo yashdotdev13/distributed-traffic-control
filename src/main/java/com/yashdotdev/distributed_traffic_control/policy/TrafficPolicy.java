@@ -32,6 +32,27 @@ public class TrafficPolicy {
             PolicyStatus status,
             long capacity,
             long refillRate,
+            Instant createdAt
+    ) {
+        this(
+                policyId,
+                name,
+                type,
+                status,
+                capacity,
+                refillRate,
+                null,
+                createdAt
+        );
+    }
+
+    public TrafficPolicy(
+            String policyId,
+            String name,
+            TrafficPolicyType type,
+            PolicyStatus status,
+            long capacity,
+            long refillRate,
             Duration windowDuration,
             Instant createdAt
     ) {

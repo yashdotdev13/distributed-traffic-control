@@ -5,6 +5,7 @@ import com.yashdotdev.distributed_traffic_control.allocation.TokenBucketAlgorith
 import com.yashdotdev.distributed_traffic_control.allocation.TrafficControlAlgorithmResolver;
 import com.yashdotdev.distributed_traffic_control.policy.TrafficPolicy;
 import com.yashdotdev.distributed_traffic_control.policy.TrafficPolicyType;
+import com.yashdotdev.distributed_traffic_control.traffic.algorithm.FixedWindowTrafficControlAlgorithm;
 import com.yashdotdev.distributed_traffic_control.traffic.algorithm.TokenBucketTrafficControlAlgorithm;
 import com.yashdotdev.distributed_traffic_control.traffic.algorithm.TrafficControlAlgorithm;
 
@@ -30,15 +31,19 @@ public class InMemoryQuotaCoordinator implements QuotaCoordinator {
     public InMemoryQuotaCoordinator(Clock clock) {
 
         this.clock = clock;
-
         TrafficControlAlgorithm tokenBucketAlgorithm =
                 new TokenBucketTrafficControlAlgorithm(clock);
+
+        TrafficControlAlgorithm fixedWindowAlgorithm =
+                new FixedWindowTrafficControlAlgorithm(clock);
 
         this.algorithmResolver =
                 new InMemoryTrafficControlAlgorithmResolver(
                         Map.of(
                                 TrafficPolicyType.TOKEN_BUCKET,
-                                tokenBucketAlgorithm
+                                tokenBucketAlgorithm,
+                                TrafficPolicyType.FIXED_WINDOW,
+                                fixedWindowAlgorithm
                         )
                 );
     }
@@ -68,6 +73,7 @@ public class InMemoryQuotaCoordinator implements QuotaCoordinator {
                     algorithmResolver.resolve(
                             policy.getType()
                     );
+
 
             return algorithm.tryConsume(
                     quota,
