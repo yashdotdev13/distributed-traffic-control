@@ -252,7 +252,7 @@ class InMemoryPolicyProviderTest {
 
         assertThrows(
                 NullPointerException.class,
-                () -> provider.findPolicy(null)
+                () -> provider.findPolicy((TrafficRequest) null)
         );
     }
 

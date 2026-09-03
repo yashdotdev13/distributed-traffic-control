@@ -3,13 +3,13 @@ package com.yashdotdev.distributed_traffic_control.policy;
 import com.yashdotdev.distributed_traffic_control.traffic.TrafficRequest;
 import com.yashdotdev.distributed_traffic_control.traffic.TrafficSubject;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class InMemoryPolicyProvider
-        implements PolicyProvider {
+public class InMemoryPolicyProvider implements PolicyProvider {
 
     private final Map<String, TrafficPolicy> policiesByResource =
             new ConcurrentHashMap<>();
@@ -36,7 +36,6 @@ public class InMemoryPolicyProvider
             String resource,
             TrafficPolicy policy
     ) {
-
         validateResource(resource);
 
         Objects.requireNonNull(
@@ -55,7 +54,6 @@ public class InMemoryPolicyProvider
             String resource,
             TrafficPolicy policy
     ) {
-
         Objects.requireNonNull(
                 subject,
                 "subject must not be null"
@@ -77,10 +75,26 @@ public class InMemoryPolicyProvider
         );
     }
 
+    public Optional<TrafficPolicy> findPolicy(
+            String resource
+    ) {
+        validateResource(resource);
+
+        return Optional.ofNullable(
+                policiesByResource.get(resource)
+        );
+    }
+
+    public List<Map.Entry<String, TrafficPolicy>> findAllPolicies() {
+
+        return List.copyOf(
+                policiesByResource.entrySet()
+        );
+    }
+
     public void removePolicy(
             String resource
     ) {
-
         validateResource(resource);
 
         policiesByResource.remove(resource);
@@ -90,7 +104,6 @@ public class InMemoryPolicyProvider
             TrafficSubject subject,
             String resource
     ) {
-
         Objects.requireNonNull(
                 subject,
                 "subject must not be null"
@@ -109,7 +122,6 @@ public class InMemoryPolicyProvider
     public void setDefaultPolicy(
             TrafficPolicy policy
     ) {
-
         this.defaultPolicy =
                 Objects.requireNonNull(
                         policy,
@@ -121,7 +133,6 @@ public class InMemoryPolicyProvider
     public Optional<TrafficPolicy> findPolicy(
             TrafficRequest request
     ) {
-
         Objects.requireNonNull(
                 request,
                 "request must not be null"
@@ -156,7 +167,6 @@ public class InMemoryPolicyProvider
     private void validateResource(
             String resource
     ) {
-
         if (resource == null || resource.isBlank()) {
             throw new IllegalArgumentException(
                     "resource must not be null or blank"
