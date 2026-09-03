@@ -4,6 +4,7 @@ import com.yashdotdev.distributed_traffic_control.traffic.TrafficControlService;
 import com.yashdotdev.distributed_traffic_control.traffic.TrafficDecision;
 import com.yashdotdev.distributed_traffic_control.traffic.TrafficRequest;
 import com.yashdotdev.distributed_traffic_control.traffic.TrafficSubject;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -17,7 +18,7 @@ public class TrafficController {
 
     @PostMapping("/evaluate")
     public ResponseEntity<TrafficEvaluationResponse> evaluate(
-             @RequestBody TrafficEvaluationRequest request
+            @Valid @RequestBody TrafficEvaluationRequest request
     ) {
 
         TrafficSubject subject =
