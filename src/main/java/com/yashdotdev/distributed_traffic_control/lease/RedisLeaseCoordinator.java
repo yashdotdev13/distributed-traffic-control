@@ -76,6 +76,151 @@ public class RedisLeaseCoordinator implements LeaseCoordinator {
                     Long.class
             );
 
+    /**
+     * Atomically:
+     *
+     * 1. Verifies that the lease exists.
+     * 2. Verifies that the lease belongs to the requested node.
+     * 3. Verifies that the lease has not expired.
+     * 4. Verifies that remaining capacity is available.
+     * 5. Decrements remaining capacity.
+     *
+     * Returns:
+     *  1 -> consumed
+     *  0 -> lease cannot be consumed
+     *
+     * The remaining capacity is returned as the second
+     * result value through the Redis hash itself.
+     */
+    private static final DefaultRedisScript<Long> CONSUME_LEASE_SCRIPT =
+            new DefaultRedisScript<>(
+                    """
+                    if redis.call('EXISTS', KEYS[1]) == 0 then
+                        return -1
+                    end
+    
+                    local leaseNodeId =
+                        redis.call('HGET', KEYS[1], 'nodeId')
+    
+                    if leaseNodeId ~= ARGV[1] then
+                        return -2
+                    end
+    
+                    local expiresAt =
+                        redis.call('HGET', KEYS[1], 'expiresAt')
+    
+                    if not expiresAt then
+                        return -1
+                    end
+    
+                    local currentTimeMillis =
+                        tonumber(ARGV[2])
+    
+                    local expiresAtMillis =
+                        tonumber(expiresAt)
+    
+                    if currentTimeMillis >= expiresAtMillis then
+                        return -3
+                    end
+    
+                    local remaining =
+                        tonumber(
+                            redis.call(
+                                'HGET',
+                                KEYS[1],
+                                'remainingCapacity'
+                            )
+                        )
+    
+                    if not remaining or remaining <= 0 then
+                        return -4
+                    end
+    
+                    remaining = remaining - 1
+    
+                    redis.call(
+                        'HSET',
+                        KEYS[1],
+                        'remainingCapacity',
+                        remaining
+                    )
+    
+                    return remaining
+                    """,
+                    Long.class
+            );
+
+    /**
+     * Atomically:
+     *
+     * 1. Verifies that the lease exists.
+     * 2. Verifies that the lease belongs to the requested node.
+     * 3. Verifies that the lease has not expired.
+     * 4. Extends the existing expiration timestamp.
+     * 5. Updates the Redis key TTL.
+     *
+     * Returns:
+     *  1 -> renewed
+     *  0 -> renewal rejected
+     */
+    private static final DefaultRedisScript<Long> RENEW_LEASE_SCRIPT =
+            new DefaultRedisScript<>(
+                    """
+                    if redis.call('EXISTS', KEYS[1]) == 0 then
+                        return 0
+                    end
+    
+                    local leaseNodeId =
+                        redis.call('HGET', KEYS[1], 'nodeId')
+    
+                    if leaseNodeId ~= ARGV[1] then
+                        return 0
+                    end
+    
+                    local expiresAt =
+                        tonumber(
+                            redis.call(
+                                'HGET',
+                                KEYS[1],
+                                'expiresAt'
+                            )
+                        )
+    
+                    if not expiresAt then
+                        return 0
+                    end
+    
+                    local currentTimeMillis =
+                        tonumber(ARGV[2])
+    
+                    if currentTimeMillis >= expiresAt then
+                        return 0
+                    end
+    
+                    local extensionMillis =
+                        tonumber(ARGV[3])
+    
+                    local newExpiresAt =
+                        expiresAt + extensionMillis
+    
+                    redis.call(
+                        'HSET',
+                        KEYS[1],
+                        'expiresAt',
+                        newExpiresAt
+                    )
+    
+                    redis.call(
+                        'PEXPIRE',
+                        KEYS[1],
+                        newExpiresAt - currentTimeMillis
+                    )
+    
+                    return 1
+                    """,
+                    Long.class
+            );
+
     private final StringRedisTemplate redisTemplate;
     private final Clock clock;
 
@@ -197,7 +342,9 @@ public class RedisLeaseCoordinator implements LeaseCoordinator {
                         String.valueOf(requestedCapacity),
                         String.valueOf(requestedCapacity),
                         issuedAt.toString(),
-                        expiresAt.toString(),
+                        String.valueOf(
+                                expiresAt.toEpochMilli()
+                        ),
                         String.valueOf(
                                 leaseDuration.toMillis()
                         )
@@ -226,8 +373,86 @@ public class RedisLeaseCoordinator implements LeaseCoordinator {
             String nodeId,
             Instant currentTime
     ) {
-        throw new UnsupportedOperationException(
-                "Redis lease consumption will be implemented next"
+        if (lease == null) {
+            throw new IllegalArgumentException(
+                    "lease must not be null"
+            );
+        }
+
+        if (nodeId == null || nodeId.isBlank()) {
+            throw new IllegalArgumentException(
+                    "nodeId must not be null or blank"
+            );
+        }
+
+        if (currentTime == null) {
+            throw new IllegalArgumentException(
+                    "currentTime must not be null"
+            );
+        }
+
+        String leaseRedisKey =
+                buildLeaseRedisKey(
+                        lease.getLeaseId()
+                );
+
+        Long result =
+                redisTemplate.execute(
+                        CONSUME_LEASE_SCRIPT,
+                        List.of(leaseRedisKey),
+                        nodeId,
+                        String.valueOf(
+                                currentTime.toEpochMilli()
+                        )
+                );
+
+        if (result == null) {
+            return new LeaseConsumptionResult(
+                    false,
+                    0
+            );
+        }
+
+        if (result == -1L) {
+            return new LeaseConsumptionResult(
+                    false,
+                    0
+            );
+        }
+
+        if (result == -2L) {
+            return new LeaseConsumptionResult(
+                    false,
+                    lease.getRemainingCapacity()
+            );
+        }
+
+        if (result == -3L) {
+            return new LeaseConsumptionResult(
+                    false,
+                    lease.getRemainingCapacity()
+            );
+        }
+
+        if (result == -4L) {
+            return new LeaseConsumptionResult(
+                    false,
+                    0
+            );
+        }
+
+        long remainingCapacity = result;
+
+        /*
+         * Keep the domain lease object synchronized with Redis.
+         */
+        if (lease.getRemainingCapacity() > 0) {
+            lease.consume();
+        }
+
+        return new LeaseConsumptionResult(
+                true,
+                remainingCapacity
         );
     }
 
@@ -237,9 +462,58 @@ public class RedisLeaseCoordinator implements LeaseCoordinator {
             String nodeId,
             Duration extension
     ) {
-        throw new UnsupportedOperationException(
-                "Redis lease renewal will be implemented next"
-        );
+        if (lease == null) {
+            throw new IllegalArgumentException(
+                    "lease must not be null"
+            );
+        }
+
+        if (nodeId == null || nodeId.isBlank()) {
+            throw new IllegalArgumentException(
+                    "nodeId must not be null or blank"
+            );
+        }
+
+        if (extension == null
+                || extension.isZero()
+                || extension.isNegative()) {
+            throw new IllegalArgumentException(
+                    "extension must be greater than zero"
+            );
+        }
+
+        String leaseRedisKey =
+                buildLeaseRedisKey(
+                        lease.getLeaseId()
+                );
+
+        Instant currentTime =
+                clock.instant();
+
+        Long result =
+                redisTemplate.execute(
+                        RENEW_LEASE_SCRIPT,
+                        List.of(leaseRedisKey),
+                        nodeId,
+                        String.valueOf(
+                                currentTime.toEpochMilli()
+                        ),
+                        String.valueOf(
+                                extension.toMillis()
+                        )
+                );
+
+        if (!Long.valueOf(1L).equals(result)) {
+            return false;
+        }
+
+        /*
+         * Keep the local domain object synchronized
+         * with the successful Redis renewal.
+         */
+        lease.renew(extension);
+
+        return true;
     }
 
     @Override
