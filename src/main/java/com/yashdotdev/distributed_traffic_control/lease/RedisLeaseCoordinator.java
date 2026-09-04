@@ -221,6 +221,58 @@ public class RedisLeaseCoordinator implements LeaseCoordinator {
                     Long.class
             );
 
+    /**
+     * Atomically:
+     *
+     * 1. Verifies that the lease exists.
+     * 2. Reads its remaining capacity.
+     * 3. Deletes the lease.
+     * 4. Returns unused capacity to the global quota.
+     *
+     * Returns:
+     *  1 -> lease released
+     *  0 -> lease did not exist
+     */
+    private static final DefaultRedisScript<Long> RELEASE_LEASE_SCRIPT =
+            new DefaultRedisScript<>(
+                    """
+                    if redis.call('EXISTS', KEYS[1]) == 0 then
+                        return 0
+                    end
+    
+                    local remaining =
+                        tonumber(
+                            redis.call(
+                                'HGET',
+                                KEYS[1],
+                                'remainingCapacity'
+                            )
+                        )
+    
+                    if not remaining then
+                        remaining = 0
+                    end
+    
+                    redis.call(
+                        'DEL',
+                        KEYS[1]
+                    )
+    
+                    if redis.call('EXISTS', KEYS[2]) == 1
+                       and remaining > 0 then
+    
+                        redis.call(
+                            'INCRBY',
+                            KEYS[2],
+                            remaining
+                        )
+                    end
+    
+                    return 1
+                    """,
+                    Long.class
+            );
+
     private final StringRedisTemplate redisTemplate;
     private final Clock clock;
 
@@ -520,9 +572,32 @@ public class RedisLeaseCoordinator implements LeaseCoordinator {
     public boolean releaseLease(
             QuotaLease lease
     ) {
-        throw new UnsupportedOperationException(
-                "Redis lease release will be implemented next"
-        );
+        if (lease == null) {
+            throw new IllegalArgumentException(
+                    "lease must not be null"
+            );
+        }
+
+        String leaseRedisKey =
+                buildLeaseRedisKey(
+                        lease.getLeaseId()
+                );
+
+        String quotaRedisKey =
+                buildQuotaRedisKey(
+                        lease.getQuotaKey()
+                );
+
+        Long result =
+                redisTemplate.execute(
+                        RELEASE_LEASE_SCRIPT,
+                        List.of(
+                                leaseRedisKey,
+                                quotaRedisKey
+                        )
+                );
+
+        return Long.valueOf(1L).equals(result);
     }
 
     private String buildQuotaRedisKey(

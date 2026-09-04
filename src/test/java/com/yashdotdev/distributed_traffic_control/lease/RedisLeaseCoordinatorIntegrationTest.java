@@ -421,6 +421,77 @@ class RedisLeaseCoordinatorIntegrationTest {
     }
 
 
+    @Test
+    void shouldReleaseLeaseAndReturnUnusedCapacity() {
+
+        StringRedisTemplate redisTemplate =
+                createRedisTemplate();
+
+        RedisLeaseCoordinator leaseCoordinator =
+                new RedisLeaseCoordinator(
+                        redisTemplate
+                );
+
+        QuotaKey quotaKey =
+                createQuotaKey();
+
+        leaseCoordinator.registerQuota(
+                quotaKey,
+                100
+        );
+
+        Optional<QuotaLease> lease =
+                leaseCoordinator.acquireLease(
+                        quotaKey,
+                        "node-a",
+                        20,
+                        Duration.ofSeconds(60)
+                );
+
+        assertTrue(lease.isPresent());
+
+        LeaseConsumptionResult consumption =
+                leaseCoordinator.tryConsume(
+                        lease.get(),
+                        "node-a",
+                        Instant.now()
+                );
+
+        assertTrue(
+                consumption.isConsumed()
+        );
+
+        assertEquals(
+                19,
+                consumption.getRemainingCapacity()
+        );
+
+        boolean released =
+                leaseCoordinator.releaseLease(
+                        lease.get()
+                );
+
+        assertTrue(released);
+
+        Optional<QuotaLease> replacementLease =
+                leaseCoordinator.acquireLease(
+                        quotaKey,
+                        "node-b",
+                        99,
+                        Duration.ofSeconds(60)
+                );
+
+        assertTrue(
+                replacementLease.isPresent()
+        );
+
+        assertEquals(
+                99,
+                replacementLease.get()
+                        .getAllocatedCapacity()
+        );
+    }
+
 
     @BeforeEach
     void cleanRedis() {
@@ -435,6 +506,9 @@ class RedisLeaseCoordinatorIntegrationTest {
                 .serverCommands()
                 .flushDb();
     }
+
+
+
     private QuotaKey createQuotaKey() {
 
         String uniqueId =
