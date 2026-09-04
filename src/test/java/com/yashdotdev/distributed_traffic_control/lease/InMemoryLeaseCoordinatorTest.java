@@ -1241,6 +1241,157 @@ class InMemoryLeaseCoordinatorTest {
         assertTrue(lease.isEmpty());
     }
 
+    @Test
+    void shouldShareGlobalCapacityAcrossNodes() {
+
+        Clock clock = Clock.fixed(
+                Instant.parse("2026-08-28T10:00:00Z"),
+                ZoneOffset.UTC
+        );
+
+        InMemoryLeaseCoordinator leaseCoordinator =
+                new InMemoryLeaseCoordinator(clock);
+
+        QuotaKey quotaKey = createQuotaKey();
+
+        leaseCoordinator.registerQuota(
+                quotaKey,
+                10
+        );
+
+        Optional<QuotaLease> nodeALease =
+                leaseCoordinator.acquireLease(
+                        quotaKey,
+                        "node-a",
+                        6,
+                        Duration.ofSeconds(60)
+                );
+
+        assertTrue(nodeALease.isPresent());
+
+        assertEquals(
+                6,
+                nodeALease.get().getAllocatedCapacity()
+        );
+
+        assertEquals(
+                6,
+                nodeALease.get().getRemainingCapacity()
+        );
+
+        Optional<QuotaLease> nodeBLease =
+                leaseCoordinator.acquireLease(
+                        quotaKey,
+                        "node-b",
+                        4,
+                        Duration.ofSeconds(60)
+                );
+
+        assertTrue(nodeBLease.isPresent());
+
+        assertEquals(
+                4,
+                nodeBLease.get().getAllocatedCapacity()
+        );
+
+        assertEquals(
+                4,
+                nodeBLease.get().getRemainingCapacity()
+        );
+
+        Optional<QuotaLease> nodeCLease =
+                leaseCoordinator.acquireLease(
+                        quotaKey,
+                        "node-c",
+                        1,
+                        Duration.ofSeconds(60)
+                );
+
+        assertTrue(nodeCLease.isEmpty());
+    }
+
+    @Test
+    void shouldNotExceedGlobalCapacityWhenNodesAllocateConcurrently()
+            throws Exception {
+
+        Clock clock = Clock.fixed(
+                Instant.parse("2026-08-28T10:00:00Z"),
+                ZoneOffset.UTC
+        );
+
+        InMemoryLeaseCoordinator leaseCoordinator =
+                new InMemoryLeaseCoordinator(clock);
+
+        QuotaKey quotaKey = createQuotaKey();
+
+        int globalCapacity = 100;
+        int numberOfNodes = 20;
+        int requestedCapacityPerNode = 10;
+
+        leaseCoordinator.registerQuota(
+                quotaKey,
+                globalCapacity
+        );
+
+        ExecutorService executorService =
+                Executors.newFixedThreadPool(numberOfNodes);
+
+        CountDownLatch startLatch =
+                new CountDownLatch(1);
+
+        List<Future<Optional<QuotaLease>>> futures =
+                new ArrayList<>();
+
+        for (int i = 0; i < numberOfNodes; i++) {
+
+            String nodeId = "node-" + i;
+
+            futures.add(
+                    executorService.submit(() -> {
+
+                        startLatch.await();
+
+                        return leaseCoordinator.acquireLease(
+                                quotaKey,
+                                nodeId,
+                                requestedCapacityPerNode,
+                                Duration.ofSeconds(60)
+                        );
+                    })
+            );
+        }
+
+        startLatch.countDown();
+
+        int successfulLeases = 0;
+        long totalAllocatedCapacity = 0;
+
+        for (Future<Optional<QuotaLease>> future : futures) {
+
+            Optional<QuotaLease> lease =
+                    future.get();
+
+            if (lease.isPresent()) {
+                successfulLeases++;
+
+                totalAllocatedCapacity +=
+                        lease.get().getAllocatedCapacity();
+            }
+        }
+
+        executorService.shutdown();
+
+        assertEquals(
+                globalCapacity,
+                totalAllocatedCapacity
+        );
+
+        assertEquals(
+                globalCapacity / requestedCapacityPerNode,
+                successfulLeases
+        );
+    }
+
 
     private QuotaKey createQuotaKey() {
         return new QuotaKey(
