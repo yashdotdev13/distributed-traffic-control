@@ -45,6 +45,21 @@ public class InMemoryLeaseCoordinator implements LeaseCoordinator {
     }
 
     @Override
+    public boolean removeQuota(
+            QuotaKey quotaKey
+    ) {
+        if (quotaKey == null) {
+            throw new IllegalArgumentException(
+                    "quotaKey must not be null"
+            );
+        }
+
+        return availableCapacityByQuota.remove(
+                buildKey(quotaKey)
+        ) != null;
+    }
+
+    @Override
     public Optional<QuotaLease> acquireLease(
             QuotaKey quotaKey,
             String nodeId,
@@ -330,4 +345,6 @@ public class InMemoryLeaseCoordinator implements LeaseCoordinator {
                 quotaKey.getResources()
         );
     }
+
+
 }

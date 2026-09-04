@@ -8,6 +8,15 @@ import java.util.Optional;
 
 public interface LeaseCoordinator {
 
+    void registerQuota(
+            QuotaKey quotaKey,
+            long capacity
+    );
+
+    boolean removeQuota(
+            QuotaKey quotaKey
+    );
+
     Optional<QuotaLease> acquireLease(
             QuotaKey quotaKey,
             String nodeId,
@@ -27,5 +36,7 @@ public interface LeaseCoordinator {
             Duration extension
     );
 
-    boolean releaseLease(QuotaLease lease);
+    boolean releaseLease(
+            QuotaLease lease
+    );
 }

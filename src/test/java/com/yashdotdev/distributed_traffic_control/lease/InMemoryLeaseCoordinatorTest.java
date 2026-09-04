@@ -1166,6 +1166,82 @@ class InMemoryLeaseCoordinatorTest {
         );
     }
 
+    @Test
+    void shouldRegisterQuota() {
+
+        Clock clock = Clock.fixed(
+                Instant.parse("2026-08-28T10:00:00Z"),
+                ZoneOffset.UTC
+        );
+
+        InMemoryLeaseCoordinator leaseCoordinator =
+                new InMemoryLeaseCoordinator(clock);
+
+        QuotaKey quotaKey = createQuotaKey();
+
+        leaseCoordinator.registerQuota(
+                quotaKey,
+                100
+        );
+
+        Optional<QuotaLease> lease =
+                leaseCoordinator.acquireLease(
+                        quotaKey,
+                        "node-1",
+                        100,
+                        Duration.ofSeconds(60)
+                );
+
+        assertTrue(lease.isPresent());
+
+        assertEquals(
+                100,
+                lease.get().getAllocatedCapacity()
+        );
+
+        assertEquals(
+                100,
+                lease.get().getRemainingCapacity()
+        );
+    }
+
+    @Test
+    void shouldRemoveQuotaAndPreventNewLeases() {
+
+        Clock clock = Clock.fixed(
+                Instant.parse("2026-08-28T10:00:00Z"),
+                ZoneOffset.UTC
+        );
+
+        InMemoryLeaseCoordinator leaseCoordinator =
+                new InMemoryLeaseCoordinator(clock);
+
+        QuotaKey quotaKey = createQuotaKey();
+
+        leaseCoordinator.registerQuota(
+                quotaKey,
+                100
+        );
+
+        boolean removed =
+                leaseCoordinator.removeQuota(
+                        quotaKey
+                );
+
+        assertTrue(removed);
+
+        Optional<QuotaLease> lease =
+                leaseCoordinator.acquireLease(
+                        quotaKey,
+                        "node-1",
+                        10,
+                        Duration.ofSeconds(60)
+                );
+
+        assertTrue(lease.isEmpty());
+    }
+
+
     private QuotaKey createQuotaKey() {
         return new QuotaKey(
                 "test-policy",
