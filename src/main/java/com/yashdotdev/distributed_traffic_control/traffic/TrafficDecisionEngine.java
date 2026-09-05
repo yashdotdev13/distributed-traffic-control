@@ -11,7 +11,6 @@ import com.yashdotdev.distributed_traffic_control.quota.QuotaCoordinator;
 import com.yashdotdev.distributed_traffic_control.quota.QuotaKey;
 import io.micrometer.core.instrument.Timer;
 
-import java.time.Instant;
 import java.util.Optional;
 
 public class TrafficDecisionEngine {
