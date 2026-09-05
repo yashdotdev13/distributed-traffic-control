@@ -5,10 +5,7 @@ import com.yashdotdev.distributed_traffic_control.allocation.AllocationStrategy;
 import com.yashdotdev.distributed_traffic_control.allocation.CapacityAllocator;
 import com.yashdotdev.distributed_traffic_control.allocation.FixedAllocationStrategy;
 import com.yashdotdev.distributed_traffic_control.allocation.InMemoryCapacityAllocator;
-import com.yashdotdev.distributed_traffic_control.lease.InMemoryLeaseCoordinator;
-import com.yashdotdev.distributed_traffic_control.lease.InMemoryLeaseStore;
-import com.yashdotdev.distributed_traffic_control.lease.LeaseCoordinator;
-import com.yashdotdev.distributed_traffic_control.lease.LeaseStore;
+import com.yashdotdev.distributed_traffic_control.lease.*;
 import com.yashdotdev.distributed_traffic_control.policy.*;
 import com.yashdotdev.distributed_traffic_control.quota.InMemoryQuotaCoordinator;
 import com.yashdotdev.distributed_traffic_control.quota.QuotaCoordinator;
@@ -17,6 +14,7 @@ import com.yashdotdev.distributed_traffic_control.traffic.TrafficControlService;
 import com.yashdotdev.distributed_traffic_control.traffic.TrafficDecisionEngine;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.time.Clock;
 
@@ -138,6 +136,18 @@ public class TrafficControlConfiguration {
     ) {
         return new DefaultTrafficControlService(
                 trafficDecisionEngine
+        );
+    }
+
+
+    @Bean
+    public RedisLeaseCoordinator redisLeaseCoordinator(
+            StringRedisTemplate redisTemplate,
+            Clock clock
+    ) {
+        return new RedisLeaseCoordinator(
+                redisTemplate,
+                clock
         );
     }
 
