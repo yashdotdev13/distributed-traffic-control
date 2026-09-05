@@ -72,9 +72,11 @@ public class TrafficControlConfiguration {
 
     @Bean
     public LeaseCoordinator leaseCoordinator(
+            StringRedisTemplate redisTemplate,
             Clock clock
     ) {
-        return new InMemoryLeaseCoordinator(
+        return new RedisLeaseCoordinator(
+                redisTemplate,
                 clock
         );
     }

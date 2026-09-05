@@ -28,10 +28,17 @@ public class InMemoryLeaseCoordinator implements LeaseCoordinator {
         this.clock = clock;
     }
 
-    public void registerQuota(
-            QuotaKey quotaKey,
+    @Override
+    public void registerCapacity(
+            GlobalCapacityKey capacityKey,
             long capacity
     ) {
+        if (capacityKey == null) {
+            throw new IllegalArgumentException(
+                    "capacityKey must not be null"
+            );
+        }
+
         if (capacity <= 0) {
             throw new IllegalArgumentException(
                     "capacity must be greater than zero"
@@ -39,23 +46,23 @@ public class InMemoryLeaseCoordinator implements LeaseCoordinator {
         }
 
         availableCapacityByQuota.putIfAbsent(
-                buildKey(quotaKey),
+                buildGlobalKey(capacityKey),
                 capacity
         );
     }
 
     @Override
-    public boolean removeQuota(
-            QuotaKey quotaKey
+    public boolean removeCapacity(
+            GlobalCapacityKey capacityKey
     ) {
-        if (quotaKey == null) {
+        if (capacityKey == null) {
             throw new IllegalArgumentException(
-                    "quotaKey must not be null"
+                    "capacityKey must not be null"
             );
         }
 
         return availableCapacityByQuota.remove(
-                buildKey(quotaKey)
+                buildGlobalKey(capacityKey)
         ) != null;
     }
 
@@ -73,7 +80,14 @@ public class InMemoryLeaseCoordinator implements LeaseCoordinator {
                 leaseDuration
         );
 
-        String key = buildKey(quotaKey);
+        GlobalCapacityKey capacityKey =
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                );
+
+        String key =
+                buildGlobalKey(capacityKey);
 
         synchronized (availableCapacityByQuota) {
 
@@ -209,9 +223,16 @@ public class InMemoryLeaseCoordinator implements LeaseCoordinator {
                     activeLease.getRemainingCapacity();
 
             if (remainingCapacity > 0) {
-                String key = buildKey(
-                        activeLease.getQuotaKey()
-                );
+                QuotaKey quotaKey =
+                        activeLease.getQuotaKey();
+
+                String key =
+                        buildGlobalKey(
+                                new GlobalCapacityKey(
+                                        quotaKey.getPolicyId(),
+                                        quotaKey.getResources()
+                                )
+                        );
 
                 availableCapacityByQuota.merge(
                         key,
@@ -238,9 +259,17 @@ public class InMemoryLeaseCoordinator implements LeaseCoordinator {
                             lease.getRemainingCapacity();
 
                     if (unusedCapacity > 0) {
-                        String key = buildKey(
-                                lease.getQuotaKey()
-                        );
+
+                        QuotaKey quotaKey =
+                                lease.getQuotaKey();
+
+                        String key =
+                                buildGlobalKey(
+                                        new GlobalCapacityKey(
+                                                quotaKey.getPolicyId(),
+                                                quotaKey.getResources()
+                                        )
+                                );
 
                         availableCapacityByQuota.merge(
                                 key,
@@ -343,6 +372,16 @@ public class InMemoryLeaseCoordinator implements LeaseCoordinator {
                 quotaKey.getSubject().getType().name(),
                 quotaKey.getSubject().getSubjectId(),
                 quotaKey.getResources()
+        );
+    }
+
+    private String buildGlobalKey(
+            GlobalCapacityKey capacityKey
+    ) {
+        return String.join(
+                ":",
+                capacityKey.policyId(),
+                capacityKey.resource()
         );
     }
 

@@ -306,11 +306,15 @@ public class RedisLeaseCoordinator implements LeaseCoordinator {
     }
 
     @Override
-    public void registerQuota(
-            QuotaKey quotaKey,
+    public void registerCapacity(
+            GlobalCapacityKey capacityKey,
             long capacity
     ) {
-        validateQuotaKey(quotaKey);
+        if (capacityKey == null) {
+            throw new IllegalArgumentException(
+                    "capacityKey must not be null"
+            );
+        }
 
         if (capacity <= 0) {
             throw new IllegalArgumentException(
@@ -319,20 +323,26 @@ public class RedisLeaseCoordinator implements LeaseCoordinator {
         }
 
         redisTemplate.opsForValue().setIfAbsent(
-                buildQuotaRedisKey(quotaKey),
+                buildGlobalCapacityRedisKey(capacityKey),
                 String.valueOf(capacity)
         );
     }
 
     @Override
-    public boolean removeQuota(
-            QuotaKey quotaKey
+    public boolean removeCapacity(
+            GlobalCapacityKey capacityKey
     ) {
-        validateQuotaKey(quotaKey);
+        if (capacityKey == null) {
+            throw new IllegalArgumentException(
+                    "capacityKey must not be null"
+            );
+        }
 
         Boolean deleted =
                 redisTemplate.delete(
-                        buildQuotaRedisKey(quotaKey)
+                        buildGlobalCapacityRedisKey(
+                                capacityKey
+                        )
                 );
 
         return Boolean.TRUE.equals(deleted);
@@ -376,9 +386,16 @@ public class RedisLeaseCoordinator implements LeaseCoordinator {
         String leaseId =
                 UUID.randomUUID().toString();
 
-        String quotaRedisKey =
-                buildQuotaRedisKey(quotaKey);
+        GlobalCapacityKey capacityKey =
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                );
 
+        String quotaRedisKey =
+                buildGlobalCapacityRedisKey(
+                        capacityKey
+                );
         String leaseRedisKey =
                 buildLeaseRedisKey(leaseId);
 
@@ -583,9 +600,18 @@ public class RedisLeaseCoordinator implements LeaseCoordinator {
                         lease.getLeaseId()
                 );
 
+        QuotaKey quotaKey =
+                lease.getQuotaKey();
+
+        GlobalCapacityKey capacityKey =
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                );
+
         String quotaRedisKey =
-                buildQuotaRedisKey(
-                        lease.getQuotaKey()
+                buildGlobalCapacityRedisKey(
+                        capacityKey
                 );
 
         Long result =
@@ -620,6 +646,15 @@ public class RedisLeaseCoordinator implements LeaseCoordinator {
                         .getSubjectId(),
                 quotaKey.getResources()
         );
+    }
+
+    private String buildGlobalCapacityRedisKey(
+            GlobalCapacityKey capacityKey
+    ) {
+        return QUOTA_KEY_PREFIX
+                + capacityKey.policyId()
+                + ":"
+                + capacityKey.resource();
     }
 
     private String buildLeaseRedisKey(

@@ -8,13 +8,13 @@ import java.util.Optional;
 
 public interface LeaseCoordinator {
 
-    void registerQuota(
-            QuotaKey quotaKey,
+    void registerCapacity(
+            GlobalCapacityKey capacityKey,
             long capacity
     );
 
-    boolean removeQuota(
-            QuotaKey quotaKey
+    boolean removeCapacity(
+            GlobalCapacityKey capacityKey
     );
 
     Optional<QuotaLease> acquireLease(

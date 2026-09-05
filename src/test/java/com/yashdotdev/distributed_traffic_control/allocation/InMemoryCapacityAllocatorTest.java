@@ -1,9 +1,6 @@
 package com.yashdotdev.distributed_traffic_control.allocation;
 
-import com.yashdotdev.distributed_traffic_control.lease.InMemoryLeaseCoordinator;
-import com.yashdotdev.distributed_traffic_control.lease.InMemoryLeaseStore;
-import com.yashdotdev.distributed_traffic_control.lease.LeaseConsumptionResult;
-import com.yashdotdev.distributed_traffic_control.lease.QuotaLease;
+import com.yashdotdev.distributed_traffic_control.lease.*;
 import com.yashdotdev.distributed_traffic_control.policy.PolicyStatus;
 import com.yashdotdev.distributed_traffic_control.policy.TrafficPolicy;
 import com.yashdotdev.distributed_traffic_control.policy.TrafficPolicyType;
@@ -68,8 +65,11 @@ class InMemoryCapacityAllocatorTest {
                 Instant.parse("2026-08-28T09:00:00Z")
         );
 
-        leaseCoordinator.registerQuota(
-                quotaKey,
+        leaseCoordinator.registerCapacity(
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                ),
                 100
         );
 
@@ -148,8 +148,11 @@ class InMemoryCapacityAllocatorTest {
                 Instant.parse("2026-08-28T09:00:00Z")
         );
 
-        leaseCoordinator.registerQuota(
-                quotaKey,
+        leaseCoordinator.registerCapacity(
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                ),
                 100
         );
 
@@ -234,8 +237,11 @@ class InMemoryCapacityAllocatorTest {
                 Instant.parse("2026-08-28T09:00:00Z")
         );
 
-        leaseCoordinator.registerQuota(
-                quotaKey,
+        leaseCoordinator.registerCapacity(
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                ),
                 100
         );
 
@@ -314,8 +320,11 @@ class InMemoryCapacityAllocatorTest {
                 Instant.parse("2026-08-28T09:00:00Z")
         );
 
-        leaseCoordinator.registerQuota(
-                quotaKey,
+        leaseCoordinator.registerCapacity(
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                ),
                 100
         );
 
@@ -398,9 +407,12 @@ class InMemoryCapacityAllocatorTest {
          * Four units of global capacity allow two
          * separate leases of two units each.
          */
-        leaseCoordinator.registerQuota(
-                quotaKey,
-                4
+        leaseCoordinator.registerCapacity(
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                ),
+                100
         );
 
         Optional<QuotaLease> firstLease =
@@ -515,9 +527,12 @@ class InMemoryCapacityAllocatorTest {
                 Instant.parse("2026-08-28T09:00:00Z")
         );
 
-        leaseCoordinator.registerQuota(
-                quotaKey,
-                2
+        leaseCoordinator.registerCapacity(
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                ),
+                100
         );
 
         /*
@@ -597,8 +612,11 @@ class InMemoryCapacityAllocatorTest {
 
         QuotaKey quotaKey = createQuotaKey();
 
-        leaseCoordinator.registerQuota(
-                quotaKey,
+        leaseCoordinator.registerCapacity(
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                ),
                 100
         );
 

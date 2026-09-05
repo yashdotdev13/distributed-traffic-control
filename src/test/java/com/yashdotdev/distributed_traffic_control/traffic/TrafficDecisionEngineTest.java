@@ -355,8 +355,11 @@ class TrafficDecisionEngineTest {
         InMemoryLeaseCoordinator leaseCoordinator =
                 new InMemoryLeaseCoordinator();
 
-        leaseCoordinator.registerQuota(
-                quotaKey,
+        leaseCoordinator.registerCapacity(
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                ),
                 10
         );
 

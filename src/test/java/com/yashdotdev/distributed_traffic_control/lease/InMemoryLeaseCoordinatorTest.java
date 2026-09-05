@@ -28,8 +28,11 @@ class InMemoryLeaseCoordinatorTest {
 
         QuotaKey quotaKey = createQuotaKey();
 
-        leaseCoordinator.registerQuota(
-                quotaKey,
+        leaseCoordinator.registerCapacity(
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                ),
                 100
         );
 
@@ -84,8 +87,11 @@ class InMemoryLeaseCoordinatorTest {
 
         QuotaKey quotaKey = createQuotaKey();
 
-        leaseCoordinator.registerQuota(
-                quotaKey,
+        leaseCoordinator.registerCapacity(
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                ),
                 100
         );
 
@@ -123,11 +129,13 @@ class InMemoryLeaseCoordinatorTest {
 
         QuotaKey quotaKey = createQuotaKey();
 
-        leaseCoordinator.registerQuota(
-                quotaKey,
+        leaseCoordinator.registerCapacity(
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                ),
                 100
         );
-
         Optional<QuotaLease> firstLease =
                 leaseCoordinator.acquireLease(
                         quotaKey,
@@ -170,8 +178,11 @@ class InMemoryLeaseCoordinatorTest {
 
         QuotaKey quotaKey = createQuotaKey();
 
-        leaseCoordinator.registerQuota(
-                quotaKey,
+        leaseCoordinator.registerCapacity(
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                ),
                 100
         );
 
@@ -254,8 +265,11 @@ class InMemoryLeaseCoordinatorTest {
 
         QuotaKey quotaKey = createQuotaKey();
 
-        leaseCoordinator.registerQuota(
-                quotaKey,
+        leaseCoordinator.registerCapacity(
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                ),
                 100
         );
 
@@ -303,8 +317,11 @@ class InMemoryLeaseCoordinatorTest {
 
         QuotaKey quotaKey = createQuotaKey();
 
-        leaseCoordinator.registerQuota(
-                quotaKey,
+        leaseCoordinator.registerCapacity(
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                ),
                 100
         );
 
@@ -348,8 +365,11 @@ class InMemoryLeaseCoordinatorTest {
 
         QuotaKey quotaKey = createQuotaKey();
 
-        leaseCoordinator.registerQuota(
-                quotaKey,
+        leaseCoordinator.registerCapacity(
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                ),
                 100
         );
 
@@ -406,8 +426,11 @@ class InMemoryLeaseCoordinatorTest {
 
         QuotaKey quotaKey = createQuotaKey();
 
-        leaseCoordinator.registerQuota(
-                quotaKey,
+        leaseCoordinator.registerCapacity(
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                ),
                 100
         );
 
@@ -454,8 +477,11 @@ class InMemoryLeaseCoordinatorTest {
 
         QuotaKey quotaKey = createQuotaKey();
 
-        leaseCoordinator.registerQuota(
-                quotaKey,
+        leaseCoordinator.registerCapacity(
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                ),
                 100
         );
 
@@ -500,8 +526,11 @@ class InMemoryLeaseCoordinatorTest {
 
         QuotaKey quotaKey = createQuotaKey();
 
-        leaseCoordinator.registerQuota(
-                quotaKey,
+        leaseCoordinator.registerCapacity(
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                ),
                 100
         );
 
@@ -560,8 +589,11 @@ class InMemoryLeaseCoordinatorTest {
 
         QuotaKey quotaKey = createQuotaKey();
 
-        leaseCoordinator.registerQuota(
-                quotaKey,
+        leaseCoordinator.registerCapacity(
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                ),
                 100
         );
 
@@ -628,8 +660,11 @@ class InMemoryLeaseCoordinatorTest {
 
         QuotaKey quotaKey = createQuotaKey();
 
-        leaseCoordinator.registerQuota(
-                quotaKey,
+        leaseCoordinator.registerCapacity(
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                ),
                 100
         );
 
@@ -667,8 +702,11 @@ class InMemoryLeaseCoordinatorTest {
 
         QuotaKey quotaKey = createQuotaKey();
 
-        leaseCoordinator.registerQuota(
-                quotaKey,
+        leaseCoordinator.registerCapacity(
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                ),
                 100
         );
 
@@ -710,9 +748,12 @@ class InMemoryLeaseCoordinatorTest {
 
         QuotaKey quotaKey = createQuotaKey();
 
-        leaseCoordinator.registerQuota(
-                quotaKey,
-                10
+        leaseCoordinator.registerCapacity(
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                ),
+                100
         );
 
         Optional<QuotaLease> lease =
@@ -794,8 +835,11 @@ class InMemoryLeaseCoordinatorTest {
 
         QuotaKey quotaKey = createQuotaKey();
 
-        leaseCoordinator.registerQuota(
-                quotaKey,
+        leaseCoordinator.registerCapacity(
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                ),
                 10
         );
 
@@ -865,8 +909,11 @@ class InMemoryLeaseCoordinatorTest {
 
         QuotaKey quotaKey = createQuotaKey();
 
-        leaseCoordinator.registerQuota(
-                quotaKey,
+        leaseCoordinator.registerCapacity(
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                ),
                 100
         );
 
@@ -953,8 +1000,11 @@ class InMemoryLeaseCoordinatorTest {
 
         QuotaKey quotaKey = createQuotaKey();
 
-        leaseCoordinator.registerQuota(
-                quotaKey,
+        leaseCoordinator.registerCapacity(
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                ),
                 100
         );
 
@@ -1052,8 +1102,11 @@ class InMemoryLeaseCoordinatorTest {
 
         QuotaKey quotaKey = createQuotaKey();
 
-        leaseCoordinator.registerQuota(
-                quotaKey,
+        leaseCoordinator.registerCapacity(
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                ),
                 100
         );
 
@@ -1115,8 +1168,11 @@ class InMemoryLeaseCoordinatorTest {
 
         QuotaKey quotaKey = createQuotaKey();
 
-        leaseCoordinator.registerQuota(
-                quotaKey,
+        leaseCoordinator.registerCapacity(
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                ),
                 100
         );
 
@@ -1179,8 +1235,11 @@ class InMemoryLeaseCoordinatorTest {
 
         QuotaKey quotaKey = createQuotaKey();
 
-        leaseCoordinator.registerQuota(
-                quotaKey,
+        leaseCoordinator.registerCapacity(
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                ),
                 100
         );
 
@@ -1218,14 +1277,20 @@ class InMemoryLeaseCoordinatorTest {
 
         QuotaKey quotaKey = createQuotaKey();
 
-        leaseCoordinator.registerQuota(
-                quotaKey,
+        leaseCoordinator.registerCapacity(
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                ),
                 100
         );
 
         boolean removed =
-                leaseCoordinator.removeQuota(
-                        quotaKey
+                leaseCoordinator.removeCapacity(
+                        new GlobalCapacityKey(
+                                quotaKey.getPolicyId(),
+                                quotaKey.getResources()
+                        )
                 );
 
         assertTrue(removed);
@@ -1254,8 +1319,11 @@ class InMemoryLeaseCoordinatorTest {
 
         QuotaKey quotaKey = createQuotaKey();
 
-        leaseCoordinator.registerQuota(
-                quotaKey,
+        leaseCoordinator.registerCapacity(
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                ),
                 10
         );
 
@@ -1328,9 +1396,12 @@ class InMemoryLeaseCoordinatorTest {
         int numberOfNodes = 20;
         int requestedCapacityPerNode = 10;
 
-        leaseCoordinator.registerQuota(
-                quotaKey,
-                globalCapacity
+        leaseCoordinator.registerCapacity(
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                ),
+                100
         );
 
         ExecutorService executorService =

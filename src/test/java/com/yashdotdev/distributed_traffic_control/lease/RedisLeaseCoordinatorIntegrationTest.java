@@ -57,9 +57,12 @@ class RedisLeaseCoordinatorIntegrationTest {
         int numberOfNodes = 20;
         int requestedCapacityPerNode = 10;
 
-        leaseCoordinator.registerQuota(
-                quotaKey,
-                globalCapacity
+        leaseCoordinator.registerCapacity(
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                ),
+                100
         );
 
         ExecutorService executorService =
@@ -138,14 +141,20 @@ class RedisLeaseCoordinatorIntegrationTest {
         QuotaKey quotaKey =
                 createQuotaKey();
 
-        leaseCoordinator.registerQuota(
-                quotaKey,
+        leaseCoordinator.registerCapacity(
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                ),
                 100
         );
 
         assertTrue(
-                leaseCoordinator.removeQuota(
-                        quotaKey
+                leaseCoordinator.removeCapacity(
+                        new GlobalCapacityKey(
+                                quotaKey.getPolicyId(),
+                                quotaKey.getResources()
+                        )
                 )
         );
 
@@ -176,8 +185,11 @@ class RedisLeaseCoordinatorIntegrationTest {
         QuotaKey quotaKey =
                 createQuotaKey();
 
-        leaseCoordinator.registerQuota(
-                quotaKey,
+        leaseCoordinator.registerCapacity(
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                ),
                 100
         );
 
@@ -220,8 +232,11 @@ class RedisLeaseCoordinatorIntegrationTest {
         QuotaKey quotaKey =
                 createQuotaKey();
 
-        leaseCoordinator.registerQuota(
-                quotaKey,
+        leaseCoordinator.registerCapacity(
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                ),
                 100
         );
 
@@ -275,8 +290,11 @@ class RedisLeaseCoordinatorIntegrationTest {
         QuotaKey quotaKey =
                 createQuotaKey();
 
-        leaseCoordinator.registerQuota(
-                quotaKey,
+        leaseCoordinator.registerCapacity(
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                ),
                 100
         );
 
@@ -337,8 +355,11 @@ class RedisLeaseCoordinatorIntegrationTest {
         QuotaKey quotaKey =
                 createQuotaKey();
 
-        leaseCoordinator.registerQuota(
-                quotaKey,
+        leaseCoordinator.registerCapacity(
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                ),
                 100
         );
 
@@ -435,8 +456,11 @@ class RedisLeaseCoordinatorIntegrationTest {
         QuotaKey quotaKey =
                 createQuotaKey();
 
-        leaseCoordinator.registerQuota(
-                quotaKey,
+        leaseCoordinator.registerCapacity(
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                ),
                 100
         );
 
