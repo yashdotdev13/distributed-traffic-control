@@ -1,0 +1,49 @@
+services:
+
+  redis:
+    image: redis:7-alpine
+    container_name: traffic-control-redis
+    ports:
+      - "6379:6379"
+
+  gateway-1:
+    image: distributed-traffic-control:latest
+    container_name: traffic-control-gateway-1
+    depends_on:
+      - redis
+    environment:
+      SERVER_PORT: 8081
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      NODE_ID: gateway-1
+      LEASE_DURATION: PT30S
+    ports:
+      - "8081:8081"
+
+  gateway-2:
+    image: distributed-traffic-control:latest
+    container_name: traffic-control-gateway-2
+    depends_on:
+      - redis
+    environment:
+      SERVER_PORT: 8081
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      NODE_ID: gateway-2
+      LEASE_DURATION: PT30S
+    ports:
+      - "8082:8081"
+
+  gateway-3:
+    image: distributed-traffic-control:latest
+    container_name: traffic-control-gateway-3
+    depends_on:
+      - redis
+    environment:
+      SERVER_PORT: 8081
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      NODE_ID: gateway-3
+      LEASE_DURATION: PT30S
+    ports:
+      - "8083:8081"
