@@ -6,19 +6,23 @@ import com.yashdotdev.distributed_traffic_control.allocation.CapacityAllocator;
 import com.yashdotdev.distributed_traffic_control.allocation.FixedAllocationStrategy;
 import com.yashdotdev.distributed_traffic_control.allocation.InMemoryCapacityAllocator;
 import com.yashdotdev.distributed_traffic_control.lease.*;
+import com.yashdotdev.distributed_traffic_control.monitoring.TrafficControlMetrics;
 import com.yashdotdev.distributed_traffic_control.policy.*;
 import com.yashdotdev.distributed_traffic_control.quota.InMemoryQuotaCoordinator;
 import com.yashdotdev.distributed_traffic_control.quota.QuotaCoordinator;
 import com.yashdotdev.distributed_traffic_control.traffic.DefaultTrafficControlService;
 import com.yashdotdev.distributed_traffic_control.traffic.TrafficControlService;
 import com.yashdotdev.distributed_traffic_control.traffic.TrafficDecisionEngine;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.time.Clock;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 
 @Configuration
+@EnableConfigurationProperties(AllocationProperties.class)
 public class TrafficControlConfiguration {
 
     @Bean
@@ -92,17 +96,6 @@ public class TrafficControlConfiguration {
     }
 
     @Bean
-    public AllocationProperties allocationProperties() {
-
-        AllocationProperties properties =
-                new AllocationProperties();
-
-        properties.setNodeId("local-node");
-
-        return properties;
-    }
-
-    @Bean
     public CapacityAllocator capacityAllocator(
             LeaseCoordinator leaseCoordinator,
             AllocationStrategy allocationStrategy,
@@ -123,12 +116,14 @@ public class TrafficControlConfiguration {
     public TrafficDecisionEngine trafficDecisionEngine(
             PolicyProvider policyProvider,
             QuotaCoordinator quotaCoordinator,
-            CapacityAllocator capacityAllocator
+            CapacityAllocator capacityAllocator,
+            TrafficControlMetrics metrics
     ) {
         return new TrafficDecisionEngine(
                 policyProvider,
                 quotaCoordinator,
-                capacityAllocator
+                capacityAllocator,
+                metrics
         );
     }
 
@@ -141,17 +136,13 @@ public class TrafficControlConfiguration {
         );
     }
 
-
     @Bean
-    public RedisLeaseCoordinator redisLeaseCoordinator(
-            StringRedisTemplate redisTemplate,
-            Clock clock
+    public TrafficControlMetrics trafficControlMetrics(
+            MeterRegistry meterRegistry
     ) {
-        return new RedisLeaseCoordinator(
-                redisTemplate,
-                clock
+        return new TrafficControlMetrics(
+                meterRegistry
         );
     }
-
 
 }
