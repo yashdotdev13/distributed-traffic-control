@@ -12,6 +12,5 @@ import java.time.Duration;
 public class AllocationProperties {
 
     private String nodeId = "local-node";
-
     private Duration leaseDuration = Duration.ofSeconds(30);
 }

@@ -10,13 +10,9 @@ import java.util.Optional;
 
 public interface CapacityAllocator {
 
-    Optional<QuotaLease> allocate(
-            TrafficPolicy policy,
-            QuotaKey quotaKey
-    );
+    Optional<QuotaLease> allocate(TrafficPolicy policy,QuotaKey quotaKey);
+    LeaseConsumptionResult tryConsume(QuotaLease lease,Instant currentTime);
 
-    LeaseConsumptionResult tryConsume(
-            QuotaLease lease,
-            Instant currentTime
-    );
+
+
 }

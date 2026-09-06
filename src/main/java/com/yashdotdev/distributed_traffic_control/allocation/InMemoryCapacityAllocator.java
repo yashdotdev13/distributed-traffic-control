@@ -28,35 +28,24 @@ public class InMemoryCapacityAllocator implements CapacityAllocator {
     ) {
         Instant currentTime = clock.instant();
 
-        Optional<QuotaLease> existingLease =
-                leaseStore.find(quotaKey);
-
-        if (existingLease.isPresent()
-                && existingLease.get().canConsume(currentTime)) {
+        Optional<QuotaLease> existingLease =leaseStore.find(quotaKey);
+        if (existingLease.isPresent()&& existingLease.get().canConsume(currentTime)) {
             return existingLease;
         }
-
         if (existingLease.isPresent()) {
             QuotaLease staleLease = existingLease.get();
-
             leaseStore.remove(quotaKey);
-
             leaseCoordinator.releaseLease(staleLease);
         }
 
-        long allocationCapacity =
-                allocationStrategy.determineCapacity(policy);
-
-        Optional<QuotaLease> newLease =
-                leaseCoordinator.acquireLease(
+        long allocationCapacity = allocationStrategy.determineCapacity(policy);
+        Optional<QuotaLease> newLease =leaseCoordinator.acquireLease(
                         quotaKey,
                         allocationProperties.getNodeId(),
                         allocationCapacity,
                         allocationProperties.getLeaseDuration()
                 );
-
         newLease.ifPresent(leaseStore::save);
-
         return newLease;
     }
 
