@@ -53,7 +53,6 @@ public class TrafficDecisionEngine {
     ) {
 
         Timer.Sample timer = null;
-
         if (metrics != null) {
             timer = metrics.startDecisionTimer();
         }

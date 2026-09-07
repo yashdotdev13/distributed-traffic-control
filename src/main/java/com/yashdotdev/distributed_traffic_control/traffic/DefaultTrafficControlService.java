@@ -13,10 +13,7 @@ public class DefaultTrafficControlService implements TrafficControlService{
 
     @Override
     public TrafficDecision evaluate(TrafficRequest request) {
-
-
         Objects.requireNonNull(request,"request must not be null");
-
         return trafficDecisionEngine.evaluate(request);
     }
 }
