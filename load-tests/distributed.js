@@ -11,15 +11,9 @@ export const options = {
     },
 };
 
-const GATEWAYS = [
-    'http://host.docker.internal:8081',
-    'http://host.docker.internal:8082',
-    'http://host.docker.internal:8083',
-];
+const BASE_URL = __ENV.BASE_URL || 'http://host.docker.internal:8081';
 
 export default function () {
-    const baseUrl = GATEWAYS[(__VU - 1) % GATEWAYS.length];
-
     const payload = JSON.stringify({
         requestId: `k6-distributed-${__VU}-${__ITER}-${Date.now()}`,
         subject: {
@@ -31,7 +25,7 @@ export default function () {
     });
 
     const response = http.post(
-        `${baseUrl}/api/v1/traffic/evaluate`,
+        `${BASE_URL}/api/v1/traffic/evaluate`,
         payload,
         {
             headers: {
