@@ -1,0 +1,9 @@
+{
+  "requestId": "manual-test-1",
+  "subject": {
+    "subjectId": "user-1",
+    "type": "USER"
+  },
+  "resource": "/api/orders",
+  "requestedAt": "2026-09-07T15:20:00Z"
+}
