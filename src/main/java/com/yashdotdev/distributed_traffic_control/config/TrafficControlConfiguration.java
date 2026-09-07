@@ -91,8 +91,10 @@ public class TrafficControlConfiguration {
     }
 
     @Bean
-    public AllocationStrategy allocationStrategy() {
-        return new FixedAllocationStrategy();
+    public FixedAllocationStrategy allocationStrategy(
+            AllocationProperties allocationProperties
+    ) {
+        return new FixedAllocationStrategy(allocationProperties);
     }
 
     @Bean
