@@ -12,10 +12,7 @@ import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-import java.time.Duration;
-import java.time.Instant;
-import java.time.ZoneOffset;
-import java.time.Clock;
+import java.time.*;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -516,6 +513,101 @@ class RedisLeaseCoordinatorIntegrationTest {
         );
     }
 
+    @Test
+    void shouldReclaimCapacityFromExpiredLease() {
+
+        MutableClock clock = new MutableClock(
+                Instant.parse("2026-08-28T10:00:00Z")
+        );
+
+        StringRedisTemplate redisTemplate =
+                createRedisTemplate();
+
+        RedisLeaseCoordinator leaseCoordinator =
+                new RedisLeaseCoordinator(
+                        redisTemplate,
+                        clock
+                );
+
+        QuotaKey quotaKey =
+                createQuotaKey();
+
+        GlobalCapacityKey capacityKey =
+                new GlobalCapacityKey(
+                        quotaKey.getPolicyId(),
+                        quotaKey.getResources()
+                );
+
+        leaseCoordinator.registerCapacity(
+                capacityKey,
+                100
+        );
+
+        /*
+         * Node A acquires 20 units.
+         */
+        Optional<QuotaLease> firstLease =
+                leaseCoordinator.acquireLease(
+                        quotaKey,
+                        "node-a",
+                        20,
+                        Duration.ofSeconds(30)
+                );
+
+        assertTrue(firstLease.isPresent());
+
+        assertEquals(
+                20,
+                firstLease.get().getAllocatedCapacity()
+        );
+
+        assertEquals(
+                20,
+                firstLease.get().getRemainingCapacity()
+        );
+
+        /*
+         * 30 seconds have now passed.
+         * The lease is expired from the coordinator's
+         * logical point of view.
+         */
+        clock.advanceSeconds(31);
+
+        /*
+         * Node B requests the entire global capacity.
+         *
+         * The coordinator must first reclaim the unused
+         * 20 units from node A's expired lease and then
+         * allocate the full 100 units to node B.
+         */
+        Optional<QuotaLease> replacementLease =
+                leaseCoordinator.acquireLease(
+                        quotaKey,
+                        "node-b",
+                        100,
+                        Duration.ofSeconds(30)
+                );
+
+        assertTrue(
+                replacementLease.isPresent()
+        );
+
+        assertEquals(
+                100,
+                replacementLease.get().getAllocatedCapacity()
+        );
+
+        assertEquals(
+                100,
+                replacementLease.get().getRemainingCapacity()
+        );
+
+        assertEquals(
+                "node-b",
+                replacementLease.get().getNodeId()
+        );
+    }
+
 
     @BeforeEach
     void cleanRedis() {
@@ -531,6 +623,41 @@ class RedisLeaseCoordinatorIntegrationTest {
                 .flushDb();
     }
 
+
+    private static class MutableClock extends Clock {
+
+        private Instant currentTime;
+
+        private MutableClock(
+                Instant currentTime
+        ) {
+            this.currentTime = currentTime;
+        }
+
+        @Override
+        public ZoneId getZone() {
+            return ZoneOffset.UTC;
+        }
+
+        @Override
+        public Clock withZone(
+                ZoneId zone
+        ) {
+            return this;
+        }
+
+        @Override
+        public Instant instant() {
+            return currentTime;
+        }
+
+        private void advanceSeconds(
+                long seconds
+        ) {
+            currentTime =
+                    currentTime.plusSeconds(seconds);
+        }
+    }
 
 
     private QuotaKey createQuotaKey() {

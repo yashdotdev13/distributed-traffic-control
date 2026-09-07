@@ -19,18 +19,34 @@ public class RedisLeaseCoordinator implements LeaseCoordinator {
     private static final String LEASE_KEY_PREFIX =
             "traffic-control:lease:";
 
+    private static final String LEASE_REGISTRY_SUFFIX =
+            ":leases";
+
     /**
      * Atomically:
      *
-     * 1. Reads the available global capacity.
-     * 2. Verifies that enough capacity exists.
-     * 3. Decrements the global capacity.
-     * 4. Creates the lease.
-     * 5. Applies the lease TTL.
+     * 1. Finds expired leases for the global capacity key.
+     * 2. Returns their unused capacity to the global pool.
+     * 3. Deletes the expired lease hashes.
+     * 4. Removes expired leases from the registry.
+     * 5. Checks whether enough global capacity is available.
+     * 6. Decrements global capacity.
+     * 7. Creates the new lease hash.
+     * 8. Adds the new lease to the expiry registry.
+     *
+     * KEYS[1] = global capacity key
+     * KEYS[2] = new lease key
+     * KEYS[3] = lease registry key
+     *
+     * ARGV[1] = requested capacity
+     * ARGV[2] = node id
+     * ARGV[3] = issued at ISO-8601 string
+     * ARGV[4] = expires at epoch millis
+     * ARGV[5] = current time epoch millis
      *
      * Returns:
-     * 1 -> lease created
-     * 0 -> insufficient/unregistered capacity
+     * 1 = lease acquired
+     * 0 = insufficient/unregistered capacity
      */
     private static final DefaultRedisScript<Long> ACQUIRE_LEASE_SCRIPT =
             new DefaultRedisScript<>(
@@ -43,7 +59,55 @@ public class RedisLeaseCoordinator implements LeaseCoordinator {
 
                     available = tonumber(available)
 
+                    local currentTimeMillis = tonumber(ARGV[5])
+
+                    local expiredLeaseKeys = redis.call(
+                        'ZRANGEBYSCORE',
+                        KEYS[3],
+                        '-inf',
+                        currentTimeMillis
+                    )
+
+                    for _, expiredLeaseKey in ipairs(expiredLeaseKeys) do
+                        if redis.call('EXISTS', expiredLeaseKey) == 1 then
+                            local remainingValue = redis.call(
+                                'HGET',
+                                expiredLeaseKey,
+                                'remainingCapacity'
+                            )
+
+                            if remainingValue then
+                                local remaining = tonumber(remainingValue)
+
+                                if remaining and remaining > 0 then
+                                    redis.call(
+                                        'INCRBY',
+                                        KEYS[1],
+                                        remaining
+                                    )
+
+                                    available = available + remaining
+                                end
+                            end
+
+                            redis.call(
+                                'DEL',
+                                expiredLeaseKey
+                            )
+                        end
+
+                        redis.call(
+                            'ZREM',
+                            KEYS[3],
+                            expiredLeaseKey
+                        )
+                    end
+
                     local requested = tonumber(ARGV[1])
+
+                    if not requested or requested <= 0 then
+                        return 0
+                    end
 
                     if available < requested then
                         return 0
@@ -58,17 +122,23 @@ public class RedisLeaseCoordinator implements LeaseCoordinator {
                     redis.call(
                         'HSET',
                         KEYS[2],
-                        'nodeId', ARGV[2],
-                        'allocatedCapacity', ARGV[3],
-                        'remainingCapacity', ARGV[4],
-                        'issuedAt', ARGV[5],
-                        'expiresAt', ARGV[6]
+                        'nodeId',
+                        ARGV[2],
+                        'allocatedCapacity',
+                        ARGV[1],
+                        'remainingCapacity',
+                        ARGV[1],
+                        'issuedAt',
+                        ARGV[3],
+                        'expiresAt',
+                        ARGV[4]
                     )
 
                     redis.call(
-                        'PEXPIRE',
-                        KEYS[2],
-                        ARGV[7]
+                        'ZADD',
+                        KEYS[3],
+                        ARGV[4],
+                        KEYS[2]
                     )
 
                     return 1
@@ -77,20 +147,14 @@ public class RedisLeaseCoordinator implements LeaseCoordinator {
             );
 
     /**
-     * Atomically:
-     *
-     * 1. Verifies that the lease exists.
-     * 2. Verifies that the lease belongs to the requested node.
-     * 3. Verifies that the lease has not expired.
-     * 4. Verifies that remaining capacity is available.
-     * 5. Decrements remaining capacity.
+     * Atomically consumes one unit from a lease.
      *
      * Returns:
-     *  1 -> consumed
-     *  0 -> lease cannot be consumed
-     *
-     * The remaining capacity is returned as the second
-     * result value through the Redis hash itself.
+     * >= 0 -> remaining capacity after consumption
+     * -1   -> lease missing
+     * -2   -> wrong owner
+     * -3   -> lease expired
+     * -4   -> lease exhausted
      */
     private static final DefaultRedisScript<Long> CONSUME_LEASE_SCRIPT =
             new DefaultRedisScript<>(
@@ -98,70 +162,81 @@ public class RedisLeaseCoordinator implements LeaseCoordinator {
                     if redis.call('EXISTS', KEYS[1]) == 0 then
                         return -1
                     end
-    
-                    local leaseNodeId =
-                        redis.call('HGET', KEYS[1], 'nodeId')
-    
+
+                    local leaseNodeId = redis.call(
+                        'HGET',
+                        KEYS[1],
+                        'nodeId'
+                    )
+
                     if leaseNodeId ~= ARGV[1] then
                         return -2
                     end
-    
-                    local expiresAt =
-                        redis.call('HGET', KEYS[1], 'expiresAt')
-    
+
+                    local expiresAtValue = redis.call(
+                        'HGET',
+                        KEYS[1],
+                        'expiresAt'
+                    )
+
+                    if not expiresAtValue then
+                        return -1
+                    end
+
+                    local expiresAt = tonumber(expiresAtValue)
+                    local currentTimeMillis = tonumber(ARGV[2])
+
                     if not expiresAt then
                         return -1
                     end
-    
-                    local currentTimeMillis =
-                        tonumber(ARGV[2])
-    
-                    local expiresAtMillis =
-                        tonumber(expiresAt)
-    
-                    if currentTimeMillis >= expiresAtMillis then
+
+                    if currentTimeMillis >= expiresAt then
                         return -3
                     end
-    
-                    local remaining =
-                        tonumber(
-                            redis.call(
-                                'HGET',
-                                KEYS[1],
-                                'remainingCapacity'
-                            )
-                        )
-    
+
+                    local remainingValue = redis.call(
+                        'HGET',
+                        KEYS[1],
+                        'remainingCapacity'
+                    )
+
+                    if not remainingValue then
+                        return -4
+                    end
+
+                    local remaining = tonumber(remainingValue)
+
                     if not remaining or remaining <= 0 then
                         return -4
                     end
-    
+
                     remaining = remaining - 1
-    
+
                     redis.call(
                         'HSET',
                         KEYS[1],
                         'remainingCapacity',
                         remaining
                     )
-    
+
                     return remaining
                     """,
                     Long.class
             );
 
     /**
-     * Atomically:
+     * Atomically renews a lease.
      *
-     * 1. Verifies that the lease exists.
-     * 2. Verifies that the lease belongs to the requested node.
-     * 3. Verifies that the lease has not expired.
-     * 4. Extends the existing expiration timestamp.
-     * 5. Updates the Redis key TTL.
+     * KEYS[1] = lease key
+     * KEYS[2] = lease registry key
+     *
+     * ARGV[1] = node id
+     * ARGV[2] = current time epoch millis
+     * ARGV[3] = extension millis
      *
      * Returns:
-     *  1 -> renewed
-     *  0 -> renewal rejected
+     * 1 = renewed
+     * 0 = renewal rejected
      */
     private static final DefaultRedisScript<Long> RENEW_LEASE_SCRIPT =
             new DefaultRedisScript<>(
@@ -169,53 +244,60 @@ public class RedisLeaseCoordinator implements LeaseCoordinator {
                     if redis.call('EXISTS', KEYS[1]) == 0 then
                         return 0
                     end
-    
-                    local leaseNodeId =
-                        redis.call('HGET', KEYS[1], 'nodeId')
-    
+
+                    local leaseNodeId = redis.call(
+                        'HGET',
+                        KEYS[1],
+                        'nodeId'
+                    )
+
                     if leaseNodeId ~= ARGV[1] then
                         return 0
                     end
-    
-                    local expiresAt =
-                        tonumber(
-                            redis.call(
-                                'HGET',
-                                KEYS[1],
-                                'expiresAt'
-                            )
-                        )
-    
+
+                    local expiresAtValue = redis.call(
+                        'HGET',
+                        KEYS[1],
+                        'expiresAt'
+                    )
+
+                    if not expiresAtValue then
+                        return 0
+                    end
+
+                    local expiresAt = tonumber(expiresAtValue)
+                    local currentTimeMillis = tonumber(ARGV[2])
+                    local extensionMillis = tonumber(ARGV[3])
+
                     if not expiresAt then
                         return 0
                     end
-    
-                    local currentTimeMillis =
-                        tonumber(ARGV[2])
-    
+
+                    if not extensionMillis or extensionMillis <= 0 then
+                        return 0
+                    end
+
                     if currentTimeMillis >= expiresAt then
                         return 0
                     end
-    
-                    local extensionMillis =
-                        tonumber(ARGV[3])
-    
+
                     local newExpiresAt =
                         expiresAt + extensionMillis
-    
+
                     redis.call(
                         'HSET',
                         KEYS[1],
                         'expiresAt',
                         newExpiresAt
                     )
-    
+
                     redis.call(
-                        'PEXPIRE',
-                        KEYS[1],
-                        newExpiresAt - currentTimeMillis
+                        'ZADD',
+                        KEYS[2],
+                        newExpiresAt,
+                        KEYS[1]
                     )
-    
+
                     return 1
                     """,
                     Long.class
@@ -224,14 +306,15 @@ public class RedisLeaseCoordinator implements LeaseCoordinator {
     /**
      * Atomically:
      *
-     * 1. Verifies that the lease exists.
-     * 2. Reads its remaining capacity.
-     * 3. Deletes the lease.
-     * 4. Returns unused capacity to the global quota.
+     * 1. Verifies lease exists.
+     * 2. Reads remaining capacity.
+     * 3. Deletes lease.
+     * 4. Removes it from expiry registry.
+     * 5. Returns unused capacity to global capacity.
      *
-     * Returns:
-     *  1 -> lease released
-     *  0 -> lease did not exist
+     * KEYS[1] = lease key
+     * KEYS[2] = global capacity key
+     * KEYS[3] = lease registry key
      */
     private static final DefaultRedisScript<Long> RELEASE_LEASE_SCRIPT =
             new DefaultRedisScript<>(
@@ -239,35 +322,44 @@ public class RedisLeaseCoordinator implements LeaseCoordinator {
                     if redis.call('EXISTS', KEYS[1]) == 0 then
                         return 0
                     end
-    
-                    local remaining =
-                        tonumber(
-                            redis.call(
-                                'HGET',
-                                KEYS[1],
-                                'remainingCapacity'
-                            )
-                        )
-    
-                    if not remaining then
-                        remaining = 0
+
+                    local remainingValue = redis.call(
+                        'HGET',
+                        KEYS[1],
+                        'remainingCapacity'
+                    )
+
+                    local remaining = 0
+
+                    if remainingValue then
+                        remaining = tonumber(remainingValue)
+
+                        if not remaining then
+                            remaining = 0
+                        end
                     end
-    
+
                     redis.call(
                         'DEL',
                         KEYS[1]
                     )
-    
-                    if redis.call('EXISTS', KEYS[2]) == 1
-                       and remaining > 0 then
-    
+
+                    redis.call(
+                        'ZREM',
+                        KEYS[3],
+                        KEYS[1]
+                    )
+
+                    if remaining > 0
+                       and redis.call('EXISTS', KEYS[2]) == 1 then
+
                         redis.call(
                             'INCRBY',
                             KEYS[2],
                             remaining
                         )
                     end
-    
+
                     return 1
                     """,
                     Long.class
@@ -338,12 +430,9 @@ public class RedisLeaseCoordinator implements LeaseCoordinator {
             );
         }
 
-        Boolean deleted =
-                redisTemplate.delete(
-                        buildGlobalCapacityRedisKey(
-                                capacityKey
-                        )
-                );
+        Boolean deleted = redisTemplate.delete(
+                buildGlobalCapacityRedisKey(capacityKey)
+        );
 
         return Boolean.TRUE.equals(deleted);
     }
@@ -377,14 +466,10 @@ public class RedisLeaseCoordinator implements LeaseCoordinator {
             );
         }
 
-        Instant issuedAt =
-                clock.instant();
+        Instant issuedAt = clock.instant();
+        Instant expiresAt = issuedAt.plus(leaseDuration);
 
-        Instant expiresAt =
-                issuedAt.plus(leaseDuration);
-
-        String leaseId =
-                UUID.randomUUID().toString();
+        String leaseId = UUID.randomUUID().toString();
 
         GlobalCapacityKey capacityKey =
                 new GlobalCapacityKey(
@@ -393,31 +478,27 @@ public class RedisLeaseCoordinator implements LeaseCoordinator {
                 );
 
         String quotaRedisKey =
-                buildGlobalCapacityRedisKey(
-                        capacityKey
-                );
+                buildGlobalCapacityRedisKey(capacityKey);
+
         String leaseRedisKey =
                 buildLeaseRedisKey(leaseId);
 
-        Long result =
-                redisTemplate.execute(
-                        ACQUIRE_LEASE_SCRIPT,
-                        List.of(
-                                quotaRedisKey,
-                                leaseRedisKey
-                        ),
-                        String.valueOf(requestedCapacity),
-                        nodeId,
-                        String.valueOf(requestedCapacity),
-                        String.valueOf(requestedCapacity),
-                        issuedAt.toString(),
-                        String.valueOf(
-                                expiresAt.toEpochMilli()
-                        ),
-                        String.valueOf(
-                                leaseDuration.toMillis()
-                        )
-                );
+        String leaseRegistryRedisKey =
+                buildLeaseRegistryRedisKey(capacityKey);
+
+        Long result = redisTemplate.execute(
+                ACQUIRE_LEASE_SCRIPT,
+                List.of(
+                        quotaRedisKey,
+                        leaseRedisKey,
+                        leaseRegistryRedisKey
+                ),
+                String.valueOf(requestedCapacity),
+                nodeId,
+                issuedAt.toString(),
+                String.valueOf(expiresAt.toEpochMilli()),
+                String.valueOf(issuedAt.toEpochMilli())
+        );
 
         if (!Long.valueOf(1L).equals(result)) {
             return Optional.empty();
@@ -465,15 +546,12 @@ public class RedisLeaseCoordinator implements LeaseCoordinator {
                         lease.getLeaseId()
                 );
 
-        Long result =
-                redisTemplate.execute(
-                        CONSUME_LEASE_SCRIPT,
-                        List.of(leaseRedisKey),
-                        nodeId,
-                        String.valueOf(
-                                currentTime.toEpochMilli()
-                        )
-                );
+        Long result = redisTemplate.execute(
+                CONSUME_LEASE_SCRIPT,
+                List.of(leaseRedisKey),
+                nodeId,
+                String.valueOf(currentTime.toEpochMilli())
+        );
 
         if (result == null) {
             return new LeaseConsumptionResult(
@@ -512,9 +590,6 @@ public class RedisLeaseCoordinator implements LeaseCoordinator {
 
         long remainingCapacity = result;
 
-        /*
-         * Keep the domain lease object synchronized with Redis.
-         */
         if (lease.getRemainingCapacity() > 0) {
             lease.consume();
         }
@@ -556,30 +631,32 @@ public class RedisLeaseCoordinator implements LeaseCoordinator {
                         lease.getLeaseId()
                 );
 
-        Instant currentTime =
-                clock.instant();
-
-        Long result =
-                redisTemplate.execute(
-                        RENEW_LEASE_SCRIPT,
-                        List.of(leaseRedisKey),
-                        nodeId,
-                        String.valueOf(
-                                currentTime.toEpochMilli()
-                        ),
-                        String.valueOf(
-                                extension.toMillis()
-                        )
+        GlobalCapacityKey capacityKey =
+                new GlobalCapacityKey(
+                        lease.getQuotaKey().getPolicyId(),
+                        lease.getQuotaKey().getResources()
                 );
+
+        String leaseRegistryRedisKey =
+                buildLeaseRegistryRedisKey(capacityKey);
+
+        Instant currentTime = clock.instant();
+
+        Long result = redisTemplate.execute(
+                RENEW_LEASE_SCRIPT,
+                List.of(
+                        leaseRedisKey,
+                        leaseRegistryRedisKey
+                ),
+                nodeId,
+                String.valueOf(currentTime.toEpochMilli()),
+                String.valueOf(extension.toMillis())
+        );
 
         if (!Long.valueOf(1L).equals(result)) {
             return false;
         }
 
-        /*
-         * Keep the local domain object synchronized
-         * with the successful Redis renewal.
-         */
         lease.renew(extension);
 
         return true;
@@ -610,42 +687,21 @@ public class RedisLeaseCoordinator implements LeaseCoordinator {
                 );
 
         String quotaRedisKey =
-                buildGlobalCapacityRedisKey(
-                        capacityKey
-                );
+                buildGlobalCapacityRedisKey(capacityKey);
 
-        Long result =
-                redisTemplate.execute(
-                        RELEASE_LEASE_SCRIPT,
-                        List.of(
-                                leaseRedisKey,
-                                quotaRedisKey
-                        )
-                );
+        String leaseRegistryRedisKey =
+                buildLeaseRegistryRedisKey(capacityKey);
+
+        Long result = redisTemplate.execute(
+                RELEASE_LEASE_SCRIPT,
+                List.of(
+                        leaseRedisKey,
+                        quotaRedisKey,
+                        leaseRegistryRedisKey
+                )
+        );
 
         return Long.valueOf(1L).equals(result);
-    }
-
-    private String buildQuotaRedisKey(
-            QuotaKey quotaKey
-    ) {
-        return QUOTA_KEY_PREFIX
-                + buildQuotaIdentity(quotaKey);
-    }
-
-    private String buildQuotaIdentity(
-            QuotaKey quotaKey
-    ) {
-        return String.join(
-                ":",
-                quotaKey.getPolicyId(),
-                quotaKey.getSubject()
-                        .getType()
-                        .name(),
-                quotaKey.getSubject()
-                        .getSubjectId(),
-                quotaKey.getResources()
-        );
     }
 
     private String buildGlobalCapacityRedisKey(
@@ -655,6 +711,13 @@ public class RedisLeaseCoordinator implements LeaseCoordinator {
                 + capacityKey.policyId()
                 + ":"
                 + capacityKey.resource();
+    }
+
+    private String buildLeaseRegistryRedisKey(
+            GlobalCapacityKey capacityKey
+    ) {
+        return buildGlobalCapacityRedisKey(capacityKey)
+                + LEASE_REGISTRY_SUFFIX;
     }
 
     private String buildLeaseRedisKey(

@@ -17,6 +17,7 @@ services:
       REDIS_PORT: 6379
       NODE_ID: gateway-1
       LEASE_DURATION: PT30S
+      LEASE_CAPACITY: 10
     ports:
       - "8081:8081"
 
@@ -31,6 +32,7 @@ services:
       REDIS_PORT: 6379
       NODE_ID: gateway-2
       LEASE_DURATION: PT30S
+      LEASE_CAPACITY: 10
     ports:
       - "8082:8081"
 
@@ -45,6 +47,7 @@ services:
       REDIS_PORT: 6379
       NODE_ID: gateway-3
       LEASE_DURATION: PT30S
+      LEASE_CAPACITY: 10
     ports:
       - "8083:8081"
 
