@@ -9,10 +9,7 @@ public class LeaseConsumptionResult {
 
     private final long remainingCapacity;
 
-    public LeaseConsumptionResult(
-            boolean consumed,
-            long remainingCapacity
-    ) {
+    public LeaseConsumptionResult(boolean consumed, long remainingCapacity) {
         this.consumed = consumed;
         this.remainingCapacity = remainingCapacity;
     }

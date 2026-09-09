@@ -9,88 +9,40 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 
-public class TokenBucketTrafficControlAlgorithm
-        implements TrafficControlAlgorithm {
+public class TokenBucketTrafficControlAlgorithm implements TrafficControlAlgorithm {
 
     private final Clock clock;
 
-    public TokenBucketTrafficControlAlgorithm(
-            Clock clock
-    ) {
-        this.clock = Objects.requireNonNull(
-                clock,
-                "clock must not be null"
-        );
+    public TokenBucketTrafficControlAlgorithm(Clock clock) {
+        this.clock = Objects.requireNonNull(clock, "clock must not be null");
     }
 
     @Override
-    public QuotaConsumptionResult tryConsume(
-            Quota quota,
-            TrafficPolicy policy
-    ) {
+    public QuotaConsumptionResult tryConsume(Quota quota, TrafficPolicy policy) {
 
-        Objects.requireNonNull(
-                quota,
-                "quota must not be null"
-        );
-
-        Objects.requireNonNull(
-                policy,
-                "policy must not be null"
-        );
+        Objects.requireNonNull(quota, "quota must not be null");
+        Objects.requireNonNull(policy, "policy must not be null");
 
         Instant now = clock.instant();
-
-        refillTokens(
-                quota,
-                policy,
-                now
-        );
-
+        refillTokens(quota, policy, now);
         if (!quota.hasAvailableCapacity()) {
-            return new QuotaConsumptionResult(
-                    false,
-                    quota.getAvailableCapacity()
-            );
+            return new QuotaConsumptionResult(false, quota.getAvailableCapacity());
         }
-
         quota.consume();
-
-        return new QuotaConsumptionResult(
-                true,
-                quota.getAvailableCapacity()
-        );
+        return new QuotaConsumptionResult(true, quota.getAvailableCapacity());
     }
 
-    private void refillTokens(
-            Quota quota,
-            TrafficPolicy policy,
-            Instant now
-    ) {
-
-        Instant lastRefilledAt =
-                quota.getLastRefilledAt();
-
-        long elapsedSeconds =
-                Duration.between(
-                        lastRefilledAt,
-                        now
-                ).getSeconds();
-
+    private void refillTokens(Quota quota, TrafficPolicy policy, Instant now) {
+        Instant lastRefilledAt = quota.getLastRefilledAt();
+        long elapsedSeconds = Duration.between(lastRefilledAt, now).getSeconds();
         if (elapsedSeconds <= 0) {
             return;
         }
 
-        long tokensToAdd =
-                elapsedSeconds * policy.getRefillRate();
-
+        long tokensToAdd = elapsedSeconds * policy.getRefillRate();
         if (tokensToAdd <= 0) {
             return;
         }
-
-        quota.refill(
-                tokensToAdd,
-                now
-        );
+        quota.refill(tokensToAdd, now);
     }
 }

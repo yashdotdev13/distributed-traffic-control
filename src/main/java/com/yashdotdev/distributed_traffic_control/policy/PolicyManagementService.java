@@ -5,27 +5,10 @@ import java.util.Optional;
 
 public interface PolicyManagementService {
 
-    TrafficPolicy registerPolicy(
-            String resource,
-            TrafficPolicy policy
-    );
-
-    Optional<TrafficPolicy> findPolicy(
-            String resource
-    );
-
+    TrafficPolicy registerPolicy(String resource, TrafficPolicy policy);
+    Optional<TrafficPolicy> findPolicy(String resource);
     List<PolicyRegistration> findAllPolicies();
-
-    TrafficPolicy updatePolicy(
-            String resource,
-            TrafficPolicy policy
-    );
-
-    void removePolicy(
-            String resource
-    );
-
-    void setDefaultPolicy(
-            TrafficPolicy policy
-    );
+    TrafficPolicy updatePolicy(String resource, TrafficPolicy policy);
+    void removePolicy(String resource);
+    void setDefaultPolicy(TrafficPolicy policy);
 }

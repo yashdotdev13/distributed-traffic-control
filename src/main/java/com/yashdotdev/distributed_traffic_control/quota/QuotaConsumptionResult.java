@@ -9,8 +9,7 @@ public class QuotaConsumptionResult {
     private final boolean consumed;
     private final long remainingCapacity;
 
-    public QuotaConsumptionResult(boolean consumed,
-                                  long remainingCapacity){
+    public QuotaConsumptionResult(boolean consumed, long remainingCapacity) {
         this.consumed = consumed;
         this.remainingCapacity = remainingCapacity;
     }

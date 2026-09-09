@@ -6,8 +6,5 @@ import com.yashdotdev.distributed_traffic_control.quota.QuotaConsumptionResult;
 
 public interface TrafficControlAlgorithm {
 
-    QuotaConsumptionResult tryConsume(
-            Quota quota,
-            TrafficPolicy policy
-    );
+    QuotaConsumptionResult tryConsume(Quota quota, TrafficPolicy policy);
 }

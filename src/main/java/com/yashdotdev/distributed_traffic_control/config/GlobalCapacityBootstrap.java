@@ -15,25 +15,14 @@ public class GlobalCapacityBootstrap implements ApplicationRunner {
     private final LeaseCoordinator leaseCoordinator;
     private final TrafficPolicy defaultTrafficPolicy;
 
-    public GlobalCapacityBootstrap(
-            LeaseCoordinator leaseCoordinator,
-            TrafficPolicy defaultTrafficPolicy
-    ) {
+    public GlobalCapacityBootstrap(LeaseCoordinator leaseCoordinator, TrafficPolicy defaultTrafficPolicy) {
         this.leaseCoordinator = leaseCoordinator;
         this.defaultTrafficPolicy = defaultTrafficPolicy;
     }
 
     @Override
     public void run(ApplicationArguments args) {
-        GlobalCapacityKey capacityKey =
-                new GlobalCapacityKey(
-                        defaultTrafficPolicy.getPolicyId(),
-                        DEFAULT_RESOURCE
-                );
-
-        leaseCoordinator.registerCapacity(
-                capacityKey,
-                defaultTrafficPolicy.getCapacity()
-        );
+        GlobalCapacityKey capacityKey = new GlobalCapacityKey(defaultTrafficPolicy.getPolicyId(), DEFAULT_RESOURCE);
+        leaseCoordinator.registerCapacity(capacityKey, defaultTrafficPolicy.getCapacity());
     }
 }

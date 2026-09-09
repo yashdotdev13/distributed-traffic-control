@@ -18,65 +18,19 @@ public class TrafficControlMetrics {
 
     public TrafficControlMetrics(MeterRegistry meterRegistry) {
         if (meterRegistry == null) {
-            throw new IllegalArgumentException(
-                    "meterRegistry must not be null"
-            );
+            throw new IllegalArgumentException("meterRegistry must not be null");
         }
 
         this.meterRegistry = meterRegistry;
-        this.decisionTimer =
-                Timer.builder("traffic_control_decision_duration")
-                        .description(
-                                "Time spent evaluating traffic-control decisions"
-                        )
-                        .publishPercentiles(
-                                0.50,
-                                0.95,
-                                0.99
-                        )
-                        .register(meterRegistry);
-        this.allowedCounter =
-                Counter.builder("traffic_control_decisions_total")
-                        .description(
-                                "Traffic-control decisions"
-                        )
-                        .tag("status", "allowed")
-                        .register(meterRegistry);
-        this.rejectedCounter =
-                Counter.builder("traffic_control_decisions_total")
-                        .description(
-                                "Traffic-control decisions"
-                        )
-                        .tag("status", "rejected")
-                        .register(meterRegistry);
-        this.quotaExhaustedCounter =
-                Counter.builder("traffic_control_quota_exhausted_total")
-                        .description(
-                                "Number of times local quota was exhausted"
-                        )
-                        .register(meterRegistry);
-        this.leaseAllocationAttemptCounter =
-                Counter.builder("traffic_control_lease_allocations_total")
-                        .description(
-                                "Lease allocation attempts"
-                        )
-                        .tag("result", "attempt")
-                        .register(meterRegistry);
-        this.leaseAllocationSuccessCounter =
-                Counter.builder("traffic_control_lease_allocations_total")
-                        .description(
-                                "Lease allocation results"
-                        )
-                        .tag("result", "success")
-                        .register(meterRegistry);
-        this.leaseAllocationFailureCounter =
-                Counter.builder("traffic_control_lease_allocations_total")
-                        .description(
-                                "Lease allocation results"
-                        )
-                        .tag("result", "failure")
-                        .register(meterRegistry);
+        this.decisionTimer = Timer.builder("traffic_control_decision_duration").description("Time spent evaluating traffic-control decisions").publishPercentiles(0.50, 0.95, 0.99).register(meterRegistry);
+        this.allowedCounter = Counter.builder("traffic_control_decisions_total").description("Traffic-control decisions").tag("status", "allowed").register(meterRegistry);
+        this.rejectedCounter = Counter.builder("traffic_control_decisions_total").description("Traffic-control decisions").tag("status", "rejected").register(meterRegistry);
+        this.quotaExhaustedCounter = Counter.builder("traffic_control_quota_exhausted_total").description("Number of times local quota was exhausted").register(meterRegistry);
+        this.leaseAllocationAttemptCounter = Counter.builder("traffic_control_lease_allocations_total").description("Lease allocation attempts").tag("result", "attempt").register(meterRegistry);
+        this.leaseAllocationSuccessCounter = Counter.builder("traffic_control_lease_allocations_total").description("Lease allocation results").tag("result", "success").register(meterRegistry);
+        this.leaseAllocationFailureCounter = Counter.builder("traffic_control_lease_allocations_total").description("Lease allocation results").tag("result", "failure").register(meterRegistry);
     }
+
     public void recordAllowed() {
         allowedCounter.increment();
     }
@@ -105,9 +59,7 @@ public class TrafficControlMetrics {
         return Timer.start(meterRegistry);
     }
 
-    public void recordDecisionDuration(
-            Timer.Sample sample
-    ) {
+    public void recordDecisionDuration(Timer.Sample sample) {
         sample.stop(decisionTimer);
     }
 }

@@ -13,20 +13,12 @@ import java.time.Instant;
 public class PolicyResponse {
 
     private String policyId;
-
     private String name;
-
     private TrafficPolicyType type;
-
     private PolicyStatus status;
-
     private long capacity;
-
     private long refillRate;
-
     private Duration windowDuration;
-
     private Instant createdAt;
-
     private String resource;
 }

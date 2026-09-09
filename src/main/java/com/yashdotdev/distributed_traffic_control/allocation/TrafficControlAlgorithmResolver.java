@@ -5,7 +5,5 @@ import com.yashdotdev.distributed_traffic_control.traffic.algorithm.TrafficContr
 
 public interface TrafficControlAlgorithmResolver {
 
-    TrafficControlAlgorithm resolve(
-            TrafficPolicyType policyType
-    );
+    TrafficControlAlgorithm resolve(TrafficPolicyType policyType);
 }

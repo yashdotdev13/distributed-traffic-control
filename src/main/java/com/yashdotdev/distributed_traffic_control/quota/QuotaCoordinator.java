@@ -4,10 +4,5 @@ import com.yashdotdev.distributed_traffic_control.policy.TrafficPolicy;
 
 public interface QuotaCoordinator {
 
-    QuotaConsumptionResult tryConsume(
-            QuotaKey quotaKey,
-            TrafficPolicy policy
-    );
-
-
+    QuotaConsumptionResult tryConsume(QuotaKey quotaKey, TrafficPolicy policy);
 }

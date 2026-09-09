@@ -16,41 +16,22 @@ import java.util.Optional;
 public class TrafficDecisionEngine {
 
     private final PolicyProvider policyProvider;
-
     private final QuotaCoordinator quotaCoordinator;
-
     private final CapacityAllocator capacityAllocator;
-
     private final TrafficControlMetrics metrics;
 
-    public TrafficDecisionEngine(
-            PolicyProvider policyProvider,
-            QuotaCoordinator quotaCoordinator,
-            CapacityAllocator capacityAllocator
-    ) {
-        this(
-                policyProvider,
-                quotaCoordinator,
-                capacityAllocator,
-                null
-        );
+    public TrafficDecisionEngine(PolicyProvider policyProvider, QuotaCoordinator quotaCoordinator, CapacityAllocator capacityAllocator) {
+        this(policyProvider, quotaCoordinator, capacityAllocator, null);
     }
 
-    public TrafficDecisionEngine(
-            PolicyProvider policyProvider,
-            QuotaCoordinator quotaCoordinator,
-            CapacityAllocator capacityAllocator,
-            TrafficControlMetrics metrics
-    ) {
+    public TrafficDecisionEngine(PolicyProvider policyProvider, QuotaCoordinator quotaCoordinator, CapacityAllocator capacityAllocator, TrafficControlMetrics metrics) {
         this.policyProvider = policyProvider;
         this.quotaCoordinator = quotaCoordinator;
         this.capacityAllocator = capacityAllocator;
         this.metrics = metrics;
     }
 
-    public TrafficDecision evaluate(
-            TrafficRequest request
-    ) {
+    public TrafficDecision evaluate(TrafficRequest request) {
 
         Timer.Sample timer = null;
         if (metrics != null) {
@@ -58,100 +39,44 @@ public class TrafficDecisionEngine {
         }
 
         try {
-            Optional<TrafficPolicy> policy =
-                    policyProvider.findPolicy(request);
-
+            Optional<TrafficPolicy> policy = policyProvider.findPolicy(request);
             if (policy.isEmpty()) {
                 recordRejected();
-
-                return new TrafficDecision(
-                        TrafficDecisionStatus.REJECTED,
-                        "No traffic policy found",
-                        0
-                );
+                return new TrafficDecision(TrafficDecisionStatus.REJECTED, "No traffic policy found", 0);
             }
 
             TrafficPolicy trafficPolicy = policy.get();
-
             if (!trafficPolicy.isActive()) {
                 recordRejected();
-
-                return new TrafficDecision(
-                        TrafficDecisionStatus.REJECTED,
-                        "Traffic policy is inactive",
-                        0
-                );
+                return new TrafficDecision(TrafficDecisionStatus.REJECTED, "Traffic policy is inactive", 0);
             }
 
-            QuotaKey quotaKey =
-                    new QuotaKey(
-                            trafficPolicy.getPolicyId(),
-                            request.getSubject(),
-                            request.getResource()
-                    );
-
-            QuotaConsumptionResult consumptionResult =
-                    quotaCoordinator.tryConsume(
-                            quotaKey,
-                            trafficPolicy
-                    );
-
+            QuotaKey quotaKey = new QuotaKey(trafficPolicy.getPolicyId(), request.getSubject(), request.getResource());
+            QuotaConsumptionResult consumptionResult = quotaCoordinator.tryConsume(quotaKey, trafficPolicy);
             if (consumptionResult.isConsumed()) {
                 recordAllowed();
 
-                return new TrafficDecision(
-                        TrafficDecisionStatus.ALLOWED,
-                        "Request allowed",
-                        consumptionResult.getRemainingCapacity()
-                );
+                return new TrafficDecision(TrafficDecisionStatus.ALLOWED, "Request allowed", consumptionResult.getRemainingCapacity());
             }
-
             recordQuotaExhausted();
             recordLeaseAllocationAttempt();
-
-            Optional<QuotaLease> lease =
-                    capacityAllocator.allocate(
-                            trafficPolicy,
-                            quotaKey
-                    );
+            Optional<QuotaLease> lease = capacityAllocator.allocate(trafficPolicy, quotaKey);
 
             if (lease.isEmpty()) {
                 recordLeaseAllocationFailure();
                 recordRejected();
 
-                return new TrafficDecision(
-                        TrafficDecisionStatus.REJECTED,
-                        "Traffic quota exhausted",
-                        consumptionResult.getRemainingCapacity()
-                );
+                return new TrafficDecision(TrafficDecisionStatus.REJECTED, "Traffic quota exhausted", consumptionResult.getRemainingCapacity());
             }
-
             recordLeaseAllocationSuccess();
-
-            LeaseConsumptionResult
-                    leaseConsumptionResult =
-                    capacityAllocator.tryConsume(
-                            lease.get(),
-                            request.getRequestedAt()
-                    );
-
+            LeaseConsumptionResult leaseConsumptionResult = capacityAllocator.tryConsume(lease.get(), request.getRequestedAt());
             if (!leaseConsumptionResult.isConsumed()) {
                 recordRejected();
 
-                return new TrafficDecision(
-                        TrafficDecisionStatus.REJECTED,
-                        "Traffic quota exhausted",
-                        leaseConsumptionResult.getRemainingCapacity()
-                );
+                return new TrafficDecision(TrafficDecisionStatus.REJECTED, "Traffic quota exhausted", leaseConsumptionResult.getRemainingCapacity());
             }
-
             recordAllowed();
-
-            return new TrafficDecision(
-                    TrafficDecisionStatus.ALLOWED,
-                    "Request allowed",
-                    leaseConsumptionResult.getRemainingCapacity()
-            );
+            return new TrafficDecision(TrafficDecisionStatus.ALLOWED, "Request allowed", leaseConsumptionResult.getRemainingCapacity());
 
         } finally {
             if (timer != null) {
@@ -159,37 +84,31 @@ public class TrafficDecisionEngine {
             }
         }
     }
-
     private void recordAllowed() {
         if (metrics != null) {
             metrics.recordAllowed();
         }
     }
-
     private void recordRejected() {
         if (metrics != null) {
             metrics.recordRejected();
         }
     }
-
     private void recordQuotaExhausted() {
         if (metrics != null) {
             metrics.recordQuotaExhausted();
         }
     }
-
     private void recordLeaseAllocationAttempt() {
         if (metrics != null) {
             metrics.recordLeaseAllocationAttempt();
         }
     }
-
     private void recordLeaseAllocationSuccess() {
         if (metrics != null) {
             metrics.recordLeaseAllocationSuccess();
         }
     }
-
     private void recordLeaseAllocationFailure() {
         if (metrics != null) {
             metrics.recordLeaseAllocationFailure();

@@ -11,14 +11,8 @@ public class TrafficSubject {
     private final TrafficSubjectType type;
 
     public TrafficSubject(String subjectId, TrafficSubjectType type) {
-        this.subjectId = Objects.requireNonNull(
-                subjectId,
-                "subjectId must not be null"
-        );
+        this.subjectId = Objects.requireNonNull(subjectId, "subjectId must not be null");
 
-        this.type = Objects.requireNonNull(
-                type,
-                "type must not be null"
-        );
+        this.type = Objects.requireNonNull(type, "type must not be null");
     }
 }

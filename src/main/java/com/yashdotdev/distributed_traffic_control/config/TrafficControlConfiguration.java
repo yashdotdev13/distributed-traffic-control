@@ -19,6 +19,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.time.Clock;
+
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 
 @Configuration
@@ -31,58 +32,29 @@ public class TrafficControlConfiguration {
     }
 
     @Bean
-    public TrafficPolicy defaultTrafficPolicy(
-            Clock clock
-    ) {
-        return new TrafficPolicy(
-                "default-policy",
-                "Default Traffic Policy",
-                TrafficPolicyType.TOKEN_BUCKET,
-                PolicyStatus.ACTIVE,
-                100,
-                10,
-                clock.instant()
-        );
+    public TrafficPolicy defaultTrafficPolicy(Clock clock) {
+        return new TrafficPolicy("default-policy", "Default Traffic Policy", TrafficPolicyType.TOKEN_BUCKET, PolicyStatus.ACTIVE, 100, 10, clock.instant());
     }
 
     @Bean
-    public InMemoryPolicyProvider policyProvider(
-            TrafficPolicy defaultTrafficPolicy
-    ) {
-        return new InMemoryPolicyProvider(
-                defaultTrafficPolicy
-        );
+    public InMemoryPolicyProvider policyProvider(TrafficPolicy defaultTrafficPolicy) {
+        return new InMemoryPolicyProvider(defaultTrafficPolicy);
     }
 
     @Bean
-    public PolicyManagementService policyManagementService(
-            InMemoryPolicyProvider policyProvider
-    ) {
-        return new DefaultPolicyManagementService(
-                policyProvider
-        );
+    public PolicyManagementService policyManagementService(InMemoryPolicyProvider policyProvider) {
+        return new DefaultPolicyManagementService(policyProvider);
     }
 
 
-
     @Bean
-    public QuotaCoordinator quotaCoordinator(
-            Clock clock
-    ) {
-        return new InMemoryQuotaCoordinator(
-                clock
-        );
+    public QuotaCoordinator quotaCoordinator(Clock clock) {
+        return new InMemoryQuotaCoordinator(clock);
     }
 
     @Bean
-    public LeaseCoordinator leaseCoordinator(
-            StringRedisTemplate redisTemplate,
-            Clock clock
-    ) {
-        return new RedisLeaseCoordinator(
-                redisTemplate,
-                clock
-        );
+    public LeaseCoordinator leaseCoordinator(StringRedisTemplate redisTemplate, Clock clock) {
+        return new RedisLeaseCoordinator(redisTemplate, clock);
     }
 
     @Bean
@@ -91,60 +63,28 @@ public class TrafficControlConfiguration {
     }
 
     @Bean
-    public FixedAllocationStrategy allocationStrategy(
-            AllocationProperties allocationProperties
-    ) {
+    public FixedAllocationStrategy allocationStrategy(AllocationProperties allocationProperties) {
         return new FixedAllocationStrategy(allocationProperties);
     }
 
     @Bean
-    public CapacityAllocator capacityAllocator(
-            LeaseCoordinator leaseCoordinator,
-            AllocationStrategy allocationStrategy,
-            AllocationProperties allocationProperties,
-            LeaseStore leaseStore,
-            Clock clock
-    ) {
-        return new InMemoryCapacityAllocator(
-                leaseCoordinator,
-                allocationStrategy,
-                allocationProperties,
-                leaseStore,
-                clock
-        );
+    public CapacityAllocator capacityAllocator(LeaseCoordinator leaseCoordinator, AllocationStrategy allocationStrategy, AllocationProperties allocationProperties, LeaseStore leaseStore, Clock clock) {
+        return new InMemoryCapacityAllocator(leaseCoordinator, allocationStrategy, allocationProperties, leaseStore, clock);
     }
 
     @Bean
-    public TrafficDecisionEngine trafficDecisionEngine(
-            PolicyProvider policyProvider,
-            QuotaCoordinator quotaCoordinator,
-            CapacityAllocator capacityAllocator,
-            TrafficControlMetrics metrics
-    ) {
-        return new TrafficDecisionEngine(
-                policyProvider,
-                quotaCoordinator,
-                capacityAllocator,
-                metrics
-        );
+    public TrafficDecisionEngine trafficDecisionEngine(PolicyProvider policyProvider, QuotaCoordinator quotaCoordinator, CapacityAllocator capacityAllocator, TrafficControlMetrics metrics) {
+        return new TrafficDecisionEngine(policyProvider, quotaCoordinator, capacityAllocator, metrics);
     }
 
     @Bean
-    public TrafficControlService trafficControlService(
-            TrafficDecisionEngine trafficDecisionEngine
-    ) {
-        return new DefaultTrafficControlService(
-                trafficDecisionEngine
-        );
+    public TrafficControlService trafficControlService(TrafficDecisionEngine trafficDecisionEngine) {
+        return new DefaultTrafficControlService(trafficDecisionEngine);
     }
 
     @Bean
-    public TrafficControlMetrics trafficControlMetrics(
-            MeterRegistry meterRegistry
-    ) {
-        return new TrafficControlMetrics(
-                meterRegistry
-        );
+    public TrafficControlMetrics trafficControlMetrics(MeterRegistry meterRegistry) {
+        return new TrafficControlMetrics(meterRegistry);
     }
 
 }

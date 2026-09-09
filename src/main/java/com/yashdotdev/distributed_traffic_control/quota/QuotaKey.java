@@ -13,10 +13,10 @@ public class QuotaKey {
     private final TrafficSubject subject;
     private final String resources;
 
-    public QuotaKey(String policyId, TrafficSubject subject, String resource){
+    public QuotaKey(String policyId, TrafficSubject subject, String resource) {
 
-        this.policyId = Objects.requireNonNull(policyId,"PolicyId must not be null");
-        this.subject = Objects.requireNonNull(subject,"Subject must not be null");
-        this.resources = Objects.requireNonNull(resource,"Resource must not be null");
+        this.policyId = Objects.requireNonNull(policyId, "PolicyId must not be null");
+        this.subject = Objects.requireNonNull(subject, "Subject must not be null");
+        this.resources = Objects.requireNonNull(resource, "Resource must not be null");
     }
 }

@@ -18,42 +18,23 @@ public class TokenBucketAlgorithm implements TrafficControlAlgorithm {
     }
 
     @Override
-    public QuotaConsumptionResult tryConsume(
-            Quota quota,
-            TrafficPolicy policy
-    ) {
+    public QuotaConsumptionResult tryConsume(Quota quota, TrafficPolicy policy) {
         refillQuota(quota, policy.getRefillRate());
 
         if (!quota.hasAvailableCapacity()) {
-            return new QuotaConsumptionResult(
-                    false,
-                    quota.getAvailableCapacity()
-            );
+            return new QuotaConsumptionResult(false, quota.getAvailableCapacity());
         }
-
         quota.consume();
-
-        return new QuotaConsumptionResult(
-                true,
-                quota.getAvailableCapacity()
-        );
+        return new QuotaConsumptionResult(true, quota.getAvailableCapacity());
     }
 
-    private void refillQuota(
-            Quota quota,
-            long refillRate
-    ) {
+    private void refillQuota(Quota quota, long refillRate) {
         Instant now = clock.instant();
 
-        long elapsedSeconds = Duration.between(
-                quota.getLastRefilledAt(),
-                now
-        ).getSeconds();
-
+        long elapsedSeconds = Duration.between(quota.getLastRefilledAt(), now).getSeconds();
         if (elapsedSeconds <= 0) {
             return;
         }
-
         long tokensToAdd = elapsedSeconds * refillRate;
         quota.refill(tokensToAdd, now);
     }
