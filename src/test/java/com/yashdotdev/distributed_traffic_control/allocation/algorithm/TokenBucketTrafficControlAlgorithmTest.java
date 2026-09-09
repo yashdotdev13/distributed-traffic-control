@@ -23,250 +23,105 @@ class TokenBucketTrafficControlAlgorithmTest {
     @Test
     void shouldConsumeTokenWhenCapacityIsAvailable() {
 
-        MutableClock clock = new MutableClock(
-                Instant.parse("2026-09-02T10:00:00Z")
-        );
+        MutableClock clock = new MutableClock(Instant.parse("2026-09-02T10:00:00Z"));
 
-        TokenBucketTrafficControlAlgorithm algorithm =
-                new TokenBucketTrafficControlAlgorithm(clock);
-
+        TokenBucketTrafficControlAlgorithm algorithm = new TokenBucketTrafficControlAlgorithm(clock);
         TrafficPolicy policy = mock(TrafficPolicy.class);
-
         when(policy.getCapacity()).thenReturn(10L);
         when(policy.getRefillRate()).thenReturn(1L);
-
-        Quota quota = new Quota(
-                createQuotaKey(),
-                10,
-                10,
-                clock.instant()
-        );
-
-        QuotaConsumptionResult result =
-                algorithm.tryConsume(
-                        quota,
-                        policy
-                );
-
+        Quota quota = new Quota(createQuotaKey(), 10, 10, clock.instant());
+        QuotaConsumptionResult result = algorithm.tryConsume(quota, policy);
         assertTrue(result.isConsumed());
-        assertEquals(
-                9,
-                result.getRemainingCapacity()
-        );
+        assertEquals(9, result.getRemainingCapacity());
     }
 
 
     @Test
     void shouldRejectRequestWhenCapacityIsExhausted() {
 
-        MutableClock clock = new MutableClock(
-                Instant.parse("2026-09-02T10:00:00Z")
-        );
-
-        TokenBucketTrafficControlAlgorithm algorithm =
-                new TokenBucketTrafficControlAlgorithm(clock);
-
+        MutableClock clock = new MutableClock(Instant.parse("2026-09-02T10:00:00Z"));
+        TokenBucketTrafficControlAlgorithm algorithm = new TokenBucketTrafficControlAlgorithm(clock);
         TrafficPolicy policy = mock(TrafficPolicy.class);
-
         when(policy.getCapacity()).thenReturn(10L);
         when(policy.getRefillRate()).thenReturn(1L);
-
-        Quota quota = new Quota(
-                createQuotaKey(),
-                10,
-                0,
-                clock.instant()
-        );
-
-        QuotaConsumptionResult result =
-                algorithm.tryConsume(
-                        quota,
-                        policy
-                );
-
+        Quota quota = new Quota(createQuotaKey(), 10, 0, clock.instant());
+        QuotaConsumptionResult result = algorithm.tryConsume(quota, policy);
         assertFalse(result.isConsumed());
-
-        assertEquals(
-                0,
-                result.getRemainingCapacity()
-        );
+        assertEquals(0, result.getRemainingCapacity());
     }
 
 
     @Test
     void shouldRefillTokensAfterTimePasses() {
 
-        MutableClock clock = new MutableClock(
-                Instant.parse("2026-09-02T10:00:00Z")
-        );
-
-        TokenBucketTrafficControlAlgorithm algorithm =
-                new TokenBucketTrafficControlAlgorithm(clock);
-
+        MutableClock clock = new MutableClock(Instant.parse("2026-09-02T10:00:00Z"));
+        TokenBucketTrafficControlAlgorithm algorithm = new TokenBucketTrafficControlAlgorithm(clock);
         TrafficPolicy policy = mock(TrafficPolicy.class);
-
         when(policy.getCapacity()).thenReturn(10L);
         when(policy.getRefillRate()).thenReturn(2L);
-
-        Quota quota = new Quota(
-                createQuotaKey(),
-                10,
-                0,
-                clock.instant()
-        );
-
+        Quota quota = new Quota(createQuotaKey(), 10, 0, clock.instant());
         clock.advanceSeconds(3);
-
-        QuotaConsumptionResult result =
-                algorithm.tryConsume(
-                        quota,
-                        policy
-                );
-
+        QuotaConsumptionResult result = algorithm.tryConsume(quota, policy);
         assertTrue(result.isConsumed());
-
-        assertEquals(
-                5,
-                result.getRemainingCapacity()
-        );
+        assertEquals(5, result.getRemainingCapacity());
     }
 
 
     @Test
     void shouldNotRefillBeyondMaximumCapacity() {
 
-        MutableClock clock = new MutableClock(
-                Instant.parse("2026-09-02T10:00:00Z")
-        );
-
-        TokenBucketTrafficControlAlgorithm algorithm =
-                new TokenBucketTrafficControlAlgorithm(clock);
-
+        MutableClock clock = new MutableClock(Instant.parse("2026-09-02T10:00:00Z"));
+        TokenBucketTrafficControlAlgorithm algorithm = new TokenBucketTrafficControlAlgorithm(clock);
         TrafficPolicy policy = mock(TrafficPolicy.class);
-
         when(policy.getCapacity()).thenReturn(10L);
         when(policy.getRefillRate()).thenReturn(5L);
-
-        Quota quota = new Quota(
-                createQuotaKey(),
-                10,
-                8,
-                clock.instant()
-        );
-
+        Quota quota = new Quota(createQuotaKey(), 10, 8, clock.instant());
         clock.advanceSeconds(5);
-
-        QuotaConsumptionResult result =
-                algorithm.tryConsume(
-                        quota,
-                        policy
-                );
-
+        QuotaConsumptionResult result = algorithm.tryConsume(quota, policy);
         assertTrue(result.isConsumed());
-
-        assertEquals(
-                9,
-                result.getRemainingCapacity()
-        );
+        assertEquals(9, result.getRemainingCapacity());
     }
 
 
     @Test
     void shouldNotRefillWhenNoTimeHasPassed() {
 
-        MutableClock clock = new MutableClock(
-                Instant.parse("2026-09-02T10:00:00Z")
-        );
-
-        TokenBucketTrafficControlAlgorithm algorithm =
-                new TokenBucketTrafficControlAlgorithm(clock);
-
+        MutableClock clock = new MutableClock(Instant.parse("2026-09-02T10:00:00Z"));
+        TokenBucketTrafficControlAlgorithm algorithm = new TokenBucketTrafficControlAlgorithm(clock);
         TrafficPolicy policy = mock(TrafficPolicy.class);
-
         when(policy.getCapacity()).thenReturn(10L);
         when(policy.getRefillRate()).thenReturn(5L);
-
-        Quota quota = new Quota(
-                createQuotaKey(),
-                10,
-                3,
-                clock.instant()
-        );
-
-        QuotaConsumptionResult result =
-                algorithm.tryConsume(
-                        quota,
-                        policy
-                );
-
+        Quota quota = new Quota(createQuotaKey(), 10, 3, clock.instant());
+        QuotaConsumptionResult result = algorithm.tryConsume(quota, policy);
         assertTrue(result.isConsumed());
-
-        assertEquals(
-                2,
-                result.getRemainingCapacity()
-        );
+        assertEquals(2, result.getRemainingCapacity());
     }
 
 
     @Test
     void shouldRefillPartialCapacityCorrectly() {
 
-        MutableClock clock = new MutableClock(
-                Instant.parse("2026-09-02T10:00:00Z")
-        );
-
-        TokenBucketTrafficControlAlgorithm algorithm =
-                new TokenBucketTrafficControlAlgorithm(clock);
-
+        MutableClock clock = new MutableClock(Instant.parse("2026-09-02T10:00:00Z"));
+        TokenBucketTrafficControlAlgorithm algorithm = new TokenBucketTrafficControlAlgorithm(clock);
         TrafficPolicy policy = mock(TrafficPolicy.class);
-
         when(policy.getCapacity()).thenReturn(10L);
         when(policy.getRefillRate()).thenReturn(2L);
-
-        Quota quota = new Quota(
-                createQuotaKey(),
-                10,
-                3,
-                clock.instant()
-        );
-
+        Quota quota = new Quota(createQuotaKey(), 10, 3, clock.instant());
         clock.advanceSeconds(2);
-
-        QuotaConsumptionResult result =
-                algorithm.tryConsume(
-                        quota,
-                        policy
-                );
-
+        QuotaConsumptionResult result = algorithm.tryConsume(quota, policy);
         assertTrue(result.isConsumed());
-
-        assertEquals(
-                6,
-                result.getRemainingCapacity()
-        );
+        assertEquals(6, result.getRemainingCapacity());
     }
 
 
     private QuotaKey createQuotaKey() {
-
-        return new QuotaKey(
-                "test-policy",
-                new TrafficSubject(
-                        "user-123",
-                        TrafficSubjectType.USER
-                ),
-                "/api/orders"
-        );
+        return new QuotaKey("test-policy", new TrafficSubject("user-123", TrafficSubjectType.USER), "/api/orders");
     }
 
 
     private static class MutableClock extends Clock {
-
         private Instant currentTime;
-
-        private MutableClock(
-                Instant currentTime
-        ) {
+        private MutableClock(Instant currentTime) {
             this.currentTime = currentTime;
         }
 
@@ -276,9 +131,7 @@ class TokenBucketTrafficControlAlgorithmTest {
         }
 
         @Override
-        public Clock withZone(
-                ZoneId zone
-        ) {
+        public Clock withZone(ZoneId zone) {
             return this;
         }
 
@@ -287,11 +140,8 @@ class TokenBucketTrafficControlAlgorithmTest {
             return currentTime;
         }
 
-        public void advanceSeconds(
-                long seconds
-        ) {
-            currentTime =
-                    currentTime.plusSeconds(seconds);
+        public void advanceSeconds(long seconds) {
+            currentTime = currentTime.plusSeconds(seconds);
         }
     }
 }

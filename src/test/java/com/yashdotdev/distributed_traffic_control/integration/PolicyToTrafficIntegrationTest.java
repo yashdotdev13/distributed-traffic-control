@@ -21,30 +21,17 @@ import java.time.Instant;
 import static org.junit.jupiter.api.Assertions.*;
 
 @Testcontainers
-@SpringBootTest(
-        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT
-)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureTestRestTemplate
 class PolicyToTrafficIntegrationTest {
 
     @Container
-    static final GenericContainer<?> REDIS =
-            new GenericContainer<>("redis:7-alpine")
-                    .withExposedPorts(6379);
+    static final GenericContainer<?> REDIS = new GenericContainer<>("redis:7-alpine").withExposedPorts(6379);
 
     @DynamicPropertySource
-    static void redisProperties(
-            DynamicPropertyRegistry registry
-    ) {
-        registry.add(
-                "spring.data.redis.host",
-                REDIS::getHost
-        );
-
-        registry.add(
-                "spring.data.redis.port",
-                () -> REDIS.getMappedPort(6379)
-        );
+    static void redisProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.data.redis.host", REDIS::getHost);
+        registry.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
     }
 
     @LocalServerPort
@@ -56,69 +43,33 @@ class PolicyToTrafficIntegrationTest {
     @Test
     void shouldUseHttpCreatedPolicyDuringTrafficEvaluation() {
 
-        String policyUrl =
-                "http://localhost:"
-                        + port
-                        + "/api/v1/policies";
+        String policyUrl = "http://localhost:" + port + "/api/v1/policies";
 
-        String trafficUrl =
-                "http://localhost:"
-                        + port
-                        + "/api/v1/traffic/evaluate";
+        String trafficUrl = "http://localhost:" + port + "/api/v1/traffic/evaluate";
 
         HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(
-                MediaType.APPLICATION_JSON
-        );
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        String resource = "/api/integration/orders";
+        HttpEntity<String> policyRequest = new HttpEntity<>("""
+                {
+                  "policyId": "integration-orders-policy",
+                  "name": "Integration Orders Policy",
+                  "type": "FIXED_WINDOW",
+                  "status": "ACTIVE",
+                  "capacity": 2,
+                  "refillRate": 1,
+                  "windowDuration": "PT1M",
+                  "createdAt": "2026-09-04T00:00:00Z",
+                  "resource": "%s"
+                }
+                """.formatted(resource), headers);
 
-        String resource =
-                "/api/integration/orders";
-
-        HttpEntity<String> policyRequest =
-                new HttpEntity<>(
-                        """
-                        {
-                          "policyId": "integration-orders-policy",
-                          "name": "Integration Orders Policy",
-                          "type": "FIXED_WINDOW",
-                          "status": "ACTIVE",
-                          "capacity": 2,
-                          "refillRate": 1,
-                          "windowDuration": "PT1M",
-                          "createdAt": "2026-09-04T00:00:00Z",
-                          "resource": "%s"
-                        }
-                        """.formatted(resource),
-                        headers
-                );
-
-        ResponseEntity<PolicyResponse> policyResponse =
-                restTemplate.exchange(
-                        policyUrl,
-                        HttpMethod.POST,
-                        policyRequest,
-                        PolicyResponse.class
-                );
-
-        assertEquals(
-                HttpStatus.OK,
-                policyResponse.getStatusCode()
-        );
-
+        ResponseEntity<PolicyResponse> policyResponse = restTemplate.exchange(policyUrl, HttpMethod.POST, policyRequest, PolicyResponse.class);
+        assertEquals(HttpStatus.OK, policyResponse.getStatusCode());
         assertNotNull(policyResponse.getBody());
-
-        assertEquals(
-                "integration-orders-policy",
-                policyResponse.getBody().getPolicyId()
-        );
-
-        assertEquals(
-                resource,
-                policyResponse.getBody().getResource()
-        );
-
-        String firstRequest =
-                """
+        assertEquals("integration-orders-policy", policyResponse.getBody().getPolicyId());
+        assertEquals(resource, policyResponse.getBody().getResource());
+        String firstRequest = """
                 {
                   "requestId": "integration-request-1",
                   "subject": {
@@ -128,37 +79,13 @@ class PolicyToTrafficIntegrationTest {
                   "resource": "%s",
                   "requestedAt": "%s"
                 }
-                """.formatted(
-                        resource,
-                        Instant.now()
-                );
-
-        ResponseEntity<TrafficEvaluationResponse> firstResponse =
-                evaluateTraffic(
-                        trafficUrl,
-                        headers,
-                        firstRequest
-                );
-
-        assertEquals(
-                HttpStatus.OK,
-                firstResponse.getStatusCode()
-        );
-
+                """.formatted(resource, Instant.now());
+        ResponseEntity<TrafficEvaluationResponse> firstResponse = evaluateTraffic(trafficUrl, headers, firstRequest);
+        assertEquals(HttpStatus.OK, firstResponse.getStatusCode());
         assertNotNull(firstResponse.getBody());
-
-        assertEquals(
-                TrafficDecisionStatus.ALLOWED,
-                firstResponse.getBody().getStatus()
-        );
-
-        assertEquals(
-                1,
-                firstResponse.getBody().getRemainingCapacity()
-        );
-
-        String secondRequest =
-                """
+        assertEquals(TrafficDecisionStatus.ALLOWED, firstResponse.getBody().getStatus());
+        assertEquals(1, firstResponse.getBody().getRemainingCapacity());
+        String secondRequest = """
                 {
                   "requestId": "integration-request-2",
                   "subject": {
@@ -168,37 +95,13 @@ class PolicyToTrafficIntegrationTest {
                   "resource": "%s",
                   "requestedAt": "%s"
                 }
-                """.formatted(
-                        resource,
-                        Instant.now()
-                );
-
-        ResponseEntity<TrafficEvaluationResponse> secondResponse =
-                evaluateTraffic(
-                        trafficUrl,
-                        headers,
-                        secondRequest
-                );
-
-        assertEquals(
-                HttpStatus.OK,
-                secondResponse.getStatusCode()
-        );
-
+                """.formatted(resource, Instant.now());
+        ResponseEntity<TrafficEvaluationResponse> secondResponse = evaluateTraffic(trafficUrl, headers, secondRequest);
+        assertEquals(HttpStatus.OK, secondResponse.getStatusCode());
         assertNotNull(secondResponse.getBody());
-
-        assertEquals(
-                TrafficDecisionStatus.ALLOWED,
-                secondResponse.getBody().getStatus()
-        );
-
-        assertEquals(
-                0,
-                secondResponse.getBody().getRemainingCapacity()
-        );
-
-        String thirdRequest =
-                """
+        assertEquals(TrafficDecisionStatus.ALLOWED, secondResponse.getBody().getStatus());
+        assertEquals(0, secondResponse.getBody().getRemainingCapacity());
+        String thirdRequest = """
                 {
                   "requestId": "integration-request-3",
                   "subject": {
@@ -208,53 +111,16 @@ class PolicyToTrafficIntegrationTest {
                   "resource": "%s",
                   "requestedAt": "%s"
                 }
-                """.formatted(
-                        resource,
-                        Instant.now()
-                );
-
-        ResponseEntity<TrafficEvaluationResponse> thirdResponse =
-                evaluateTraffic(
-                        trafficUrl,
-                        headers,
-                        thirdRequest
-                );
-
-        assertEquals(
-                HttpStatus.OK,
-                thirdResponse.getStatusCode()
-        );
-
+                """.formatted(resource, Instant.now());
+        ResponseEntity<TrafficEvaluationResponse> thirdResponse = evaluateTraffic(trafficUrl, headers, thirdRequest);
+        assertEquals(HttpStatus.OK, thirdResponse.getStatusCode());
         assertNotNull(thirdResponse.getBody());
-
-        assertEquals(
-                TrafficDecisionStatus.REJECTED,
-                thirdResponse.getBody().getStatus()
-        );
-
-        assertEquals(
-                0,
-                thirdResponse.getBody().getRemainingCapacity()
-        );
+        assertEquals(TrafficDecisionStatus.REJECTED, thirdResponse.getBody().getStatus());
+        assertEquals(0, thirdResponse.getBody().getRemainingCapacity());
     }
 
-    private ResponseEntity<TrafficEvaluationResponse> evaluateTraffic(
-            String url,
-            HttpHeaders headers,
-            String body
-    ) {
-
-        HttpEntity<String> request =
-                new HttpEntity<>(
-                        body,
-                        headers
-                );
-
-        return restTemplate.exchange(
-                url,
-                HttpMethod.POST,
-                request,
-                TrafficEvaluationResponse.class
-        );
+    private ResponseEntity<TrafficEvaluationResponse> evaluateTraffic(String url, HttpHeaders headers, String body) {
+        HttpEntity<String> request = new HttpEntity<>(body, headers);
+        return restTemplate.exchange(url, HttpMethod.POST, request, TrafficEvaluationResponse.class);
     }
 }
