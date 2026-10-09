@@ -14,6 +14,7 @@ import com.yashdotdev.distributed_traffic_control.traffic.DefaultTrafficControlS
 import com.yashdotdev.distributed_traffic_control.traffic.TrafficControlService;
 import com.yashdotdev.distributed_traffic_control.traffic.TrafficDecisionEngine;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.observation.ObservationRegistry;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -73,8 +74,18 @@ public class TrafficControlConfiguration {
     }
 
     @Bean
-    public TrafficDecisionEngine trafficDecisionEngine(PolicyProvider policyProvider, QuotaCoordinator quotaCoordinator, CapacityAllocator capacityAllocator, TrafficControlMetrics metrics) {
-        return new TrafficDecisionEngine(policyProvider, quotaCoordinator, capacityAllocator, metrics);
+    public TrafficDecisionEngine trafficDecisionEngine(
+            PolicyProvider policyProvider,
+            QuotaCoordinator quotaCoordinator,
+            CapacityAllocator capacityAllocator,
+            TrafficControlMetrics metrics,
+            ObservationRegistry observationRegistry) {
+        return new TrafficDecisionEngine(
+                policyProvider,
+                quotaCoordinator,
+                capacityAllocator,
+                metrics,
+                observationRegistry);
     }
 
     @Bean
