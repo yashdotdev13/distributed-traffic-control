@@ -54,8 +54,14 @@ public class TrafficControlConfiguration {
     }
 
     @Bean
-    public LeaseCoordinator leaseCoordinator(StringRedisTemplate redisTemplate, Clock clock) {
-        return new RedisLeaseCoordinator(redisTemplate, clock);
+    public LeaseCoordinator leaseCoordinator(
+            StringRedisTemplate redisTemplate,
+            Clock clock,
+            ObservationRegistry observationRegistry) {
+        return new RedisLeaseCoordinator(
+                redisTemplate,
+                clock,
+                observationRegistry);
     }
 
     @Bean
