@@ -35,7 +35,7 @@ services:
       NODE_ID: gateway-1
       LEASE_DURATION: PT30S
       LEASE_CAPACITY: 10
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318/v1/traces
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://jaeger:4318/v1/traces
       TRACING_SAMPLING_PROBABILITY: "1.0"
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8081/actuator/health"]
@@ -61,7 +61,7 @@ services:
       NODE_ID: gateway-2
       LEASE_DURATION: PT30S
       LEASE_CAPACITY: 10
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318/v1/traces
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://jaeger:4318/v1/traces
       TRACING_SAMPLING_PROBABILITY: "1.0"
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8081/actuator/health"]
@@ -87,7 +87,7 @@ services:
       NODE_ID: gateway-3
       LEASE_DURATION: PT30S
       LEASE_CAPACITY: 10
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318/v1/traces
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://jaeger:4318/v1/traces
       TRACING_SAMPLING_PROBABILITY: "1.0"
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8081/actuator/health"]
