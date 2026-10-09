@@ -1,6 +1,8 @@
 package com.yashdotdev.distributed_traffic_control.lease;
 
 import com.yashdotdev.distributed_traffic_control.quota.QuotaKey;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 
@@ -346,22 +348,31 @@ public class RedisLeaseCoordinator implements LeaseCoordinator {
 
     private final StringRedisTemplate redisTemplate;
     private final Clock clock;
+    private final ObservationRegistry observationRegistry;
 
     public RedisLeaseCoordinator(StringRedisTemplate redisTemplate) {
-        this(redisTemplate, Clock.systemUTC());
+        this(redisTemplate, Clock.systemUTC(), null);
     }
 
     public RedisLeaseCoordinator(StringRedisTemplate redisTemplate, Clock clock) {
+        this(redisTemplate, clock, null);
+    }
+
+    public RedisLeaseCoordinator(
+            StringRedisTemplate redisTemplate,
+            Clock clock,
+            ObservationRegistry observationRegistry) {
         if (redisTemplate == null) {
             throw new IllegalArgumentException("redisTemplate must not be null");
         }
         if (clock == null) {
             throw new IllegalArgumentException("clock must not be null");
         }
+
         this.redisTemplate = redisTemplate;
         this.clock = clock;
+        this.observationRegistry = observationRegistry;
     }
-
     @Override
     public void registerCapacity(GlobalCapacityKey capacityKey, long capacity) {
         if (capacityKey == null) {
@@ -404,7 +415,16 @@ public class RedisLeaseCoordinator implements LeaseCoordinator {
         String quotaRedisKey = buildGlobalCapacityRedisKey(capacityKey);
         String leaseRedisKey = buildLeaseRedisKey(leaseId);
         String leaseRegistryRedisKey = buildLeaseRegistryRedisKey(capacityKey);
-        Long result = redisTemplate.execute(ACQUIRE_LEASE_SCRIPT, List.of(quotaRedisKey, leaseRedisKey, leaseRegistryRedisKey), String.valueOf(requestedCapacity), nodeId, issuedAt.toString(), String.valueOf(expiresAt.toEpochMilli()), String.valueOf(issuedAt.toEpochMilli()));
+        Long result = observe(
+                "redis.lease.acquire",
+                () -> redisTemplate.execute(
+                        ACQUIRE_LEASE_SCRIPT,
+                        List.of(quotaRedisKey, leaseRedisKey, leaseRegistryRedisKey),
+                        String.valueOf(requestedCapacity),
+                        nodeId,
+                        issuedAt.toString(),
+                        String.valueOf(expiresAt.toEpochMilli()),
+                        String.valueOf(issuedAt.toEpochMilli())));
 
         if (!Long.valueOf(1L).equals(result)) {
             return Optional.empty();
@@ -426,7 +446,13 @@ public class RedisLeaseCoordinator implements LeaseCoordinator {
         }
         String leaseRedisKey = buildLeaseRedisKey(lease.getLeaseId());
 
-        Long result = redisTemplate.execute(CONSUME_LEASE_SCRIPT, List.of(leaseRedisKey), nodeId, String.valueOf(currentTime.toEpochMilli()));
+        Long result = observe(
+                "redis.lease.consume",
+                () -> redisTemplate.execute(
+                        CONSUME_LEASE_SCRIPT,
+                        List.of(leaseRedisKey),
+                        nodeId,
+                        String.valueOf(currentTime.toEpochMilli())));
 
         if (result == null) {
             return new LeaseConsumptionResult(false, 0);
@@ -467,7 +493,14 @@ public class RedisLeaseCoordinator implements LeaseCoordinator {
         GlobalCapacityKey capacityKey = new GlobalCapacityKey(lease.getQuotaKey().getPolicyId(), lease.getQuotaKey().getResources());
         String leaseRegistryRedisKey = buildLeaseRegistryRedisKey(capacityKey);
         Instant currentTime = clock.instant();
-        Long result = redisTemplate.execute(RENEW_LEASE_SCRIPT, List.of(leaseRedisKey, leaseRegistryRedisKey), nodeId, String.valueOf(currentTime.toEpochMilli()), String.valueOf(extension.toMillis()));
+        Long result = observe(
+                "redis.lease.renew",
+                () -> redisTemplate.execute(
+                        RENEW_LEASE_SCRIPT,
+                        List.of(leaseRedisKey, leaseRegistryRedisKey),
+                        nodeId,
+                        String.valueOf(currentTime.toEpochMilli()),
+                        String.valueOf(extension.toMillis())));
 
         if (!Long.valueOf(1L).equals(result)) {
             return false;
@@ -489,7 +522,11 @@ public class RedisLeaseCoordinator implements LeaseCoordinator {
         GlobalCapacityKey capacityKey = new GlobalCapacityKey(quotaKey.getPolicyId(), quotaKey.getResources());
         String quotaRedisKey = buildGlobalCapacityRedisKey(capacityKey);
         String leaseRegistryRedisKey = buildLeaseRegistryRedisKey(capacityKey);
-        Long result = redisTemplate.execute(RELEASE_LEASE_SCRIPT, List.of(leaseRedisKey, quotaRedisKey, leaseRegistryRedisKey));
+        Long result = observe(
+                "redis.lease.release",
+                () -> redisTemplate.execute(
+                        RELEASE_LEASE_SCRIPT,
+                        List.of(leaseRedisKey, quotaRedisKey, leaseRegistryRedisKey)));
 
         return Long.valueOf(1L).equals(result);
     }
@@ -508,4 +545,16 @@ public class RedisLeaseCoordinator implements LeaseCoordinator {
             throw new IllegalArgumentException("quotaKey must not be null");
         }
     }
+
+    private <T> T observe(
+            String name,
+            java.util.function.Supplier<T> operation) {
+
+        if (observationRegistry == null) {
+            return operation.get();
+        }
+        return Observation.createNotStarted(name, observationRegistry)
+                .observe(operation);
+    }
+
 }

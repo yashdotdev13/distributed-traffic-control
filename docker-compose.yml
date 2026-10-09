@@ -12,12 +12,22 @@ services:
     ports:
       - "6379:6379"
 
+  jaeger:
+    image: jaegertracing/jaeger:latest
+    container_name: traffic-control-jaeger
+    ports:
+      - "16686:16686"
+      - "4317:4317"
+      - "4318:4318"
+
   gateway-1:
     image: distributed-traffic-control:latest
     container_name: traffic-control-gateway-1
     depends_on:
       redis:
         condition: service_healthy
+      jaeger:
+        condition: service_started
     environment:
       SERVER_PORT: 8081
       REDIS_HOST: redis
@@ -25,6 +35,8 @@ services:
       NODE_ID: gateway-1
       LEASE_DURATION: PT30S
       LEASE_CAPACITY: 10
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://jaeger:4318/v1/traces
+      TRACING_SAMPLING_PROBABILITY: "1.0"
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8081/actuator/health"]
       interval: 10s
@@ -40,6 +52,8 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      jaeger:
+        condition: service_started
     environment:
       SERVER_PORT: 8081
       REDIS_HOST: redis
@@ -47,6 +61,8 @@ services:
       NODE_ID: gateway-2
       LEASE_DURATION: PT30S
       LEASE_CAPACITY: 10
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://jaeger:4318/v1/traces
+      TRACING_SAMPLING_PROBABILITY: "1.0"
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8081/actuator/health"]
       interval: 10s
@@ -62,6 +78,8 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      jaeger:
+        condition: service_started
     environment:
       SERVER_PORT: 8081
       REDIS_HOST: redis
@@ -69,6 +87,8 @@ services:
       NODE_ID: gateway-3
       LEASE_DURATION: PT30S
       LEASE_CAPACITY: 10
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://jaeger:4318/v1/traces
+      TRACING_SAMPLING_PROBABILITY: "1.0"
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8081/actuator/health"]
       interval: 10s
