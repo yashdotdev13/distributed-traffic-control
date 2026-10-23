@@ -83,6 +83,269 @@
           "legendFormat": "{{instance}} - {{result}}"
         }
       ]
+    },
+    {
+      "id": 1,
+      "type": "row",
+      "title": "Leases",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 24
+      }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Lease Allocation Success Rate",
+      "description": "Share of lease allocation attempts that acquired a lease, per gateway instance. Empty (NaN) while an instance makes no attempts.",
+      "gridPos": {
+        "h": 8,
+        "w": 9,
+        "x": 0,
+        "y": 25
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (instance) (rate(traffic_control_lease_allocations_total{result=\"success\"}[1m])) / sum by (instance) (rate(traffic_control_lease_allocations_total{result=\"attempt\"}[1m]))",
+          "legendFormat": "{{instance}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Lease Allocation Failures",
+      "description": "Lease allocation attempts per second where Redis reported insufficient global capacity, per gateway instance.",
+      "gridPos": {
+        "h": 8,
+        "w": 9,
+        "x": 9,
+        "y": 25
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (instance) (rate(traffic_control_lease_allocations_total{result=\"failure\"}[1m]))",
+          "legendFormat": "{{instance}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Quota Exhaustion (fleet, last 5m)",
+      "description": "Local quota exhaustion events across all gateway instances in the last 5 minutes.",
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 18,
+        "y": 25
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(traffic_control_quota_exhausted_total[5m]))",
+          "legendFormat": "fleet"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "row",
+      "title": "Decision latency",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 33
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Decision Latency p50 / p95 / p99",
+      "description": "Client-side quantiles published by each gateway instance. Shown per instance because quantiles cannot be averaged or summed across instances.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 34
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (instance, quantile) (traffic_control_decision_duration_seconds{quantile=~\"0.5|0.95|0.99\"})",
+          "legendFormat": "{{instance}} p{{quantile}}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Decision Latency Max",
+      "description": "Maximum decision duration per gateway instance over Micrometer's recent window.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 34
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (instance) (traffic_control_decision_duration_seconds_max)",
+          "legendFormat": "{{instance}}"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "row",
+      "title": "Instance & Redis health",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 42
+      }
+    },
+    {
+      "id": 9,
+      "type": "stat",
+      "title": "Gateway Up",
+      "description": "Prometheus scrape status of each gateway instance.",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 43
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "DOWN",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "UP",
+                  "color": "green"
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "textMode": "value_and_name",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "up{job=\"traffic-control-gateways\"}",
+          "legendFormat": "{{instance}}"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Lease Allocation Failure Ratio",
+      "description": "Share of lease allocation attempts where Redis answered but reported insufficient global capacity, per gateway instance. This reflects capacity exhaustion, not Redis availability: no Redis health metric is currently exported, and Redis connection errors are not counted as failures. Empty (NaN) while an instance makes no attempts.",
+      "gridPos": {
+        "h": 8,
+        "w": 16,
+        "x": 8,
+        "y": 43
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (instance) (rate(traffic_control_lease_allocations_total{result=\"failure\"}[1m])) / sum by (instance) (rate(traffic_control_lease_allocations_total{result=\"attempt\"}[1m]))",
+          "legendFormat": "{{instance}}"
+        }
+      ]
     }
   ],
   "schemaVersion": 39,
