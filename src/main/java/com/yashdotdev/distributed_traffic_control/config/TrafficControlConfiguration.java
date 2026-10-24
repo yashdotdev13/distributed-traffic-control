@@ -2,13 +2,22 @@ package com.yashdotdev.distributed_traffic_control.config;
 
 import com.yashdotdev.distributed_traffic_control.allocation.AllocationProperties;
 import com.yashdotdev.distributed_traffic_control.allocation.AllocationStrategy;
+import com.yashdotdev.distributed_traffic_control.allocation.AllocationStrategyConfiguration;
 import com.yashdotdev.distributed_traffic_control.allocation.CapacityAllocator;
-import com.yashdotdev.distributed_traffic_control.allocation.FixedAllocationStrategy;
 import com.yashdotdev.distributed_traffic_control.allocation.InMemoryCapacityAllocator;
-import com.yashdotdev.distributed_traffic_control.lease.*;
 import com.yashdotdev.distributed_traffic_control.lease.DistributedTokenBucket;
+import com.yashdotdev.distributed_traffic_control.lease.InMemoryLeaseStore;
+import com.yashdotdev.distributed_traffic_control.lease.LeaseCoordinator;
+import com.yashdotdev.distributed_traffic_control.lease.LeaseStore;
+import com.yashdotdev.distributed_traffic_control.lease.RedisLeaseCoordinator;
 import com.yashdotdev.distributed_traffic_control.monitoring.TrafficControlMetrics;
-import com.yashdotdev.distributed_traffic_control.policy.*;
+import com.yashdotdev.distributed_traffic_control.policy.DefaultPolicyManagementService;
+import com.yashdotdev.distributed_traffic_control.policy.InMemoryPolicyProvider;
+import com.yashdotdev.distributed_traffic_control.policy.PolicyManagementService;
+import com.yashdotdev.distributed_traffic_control.policy.PolicyProvider;
+import com.yashdotdev.distributed_traffic_control.policy.TrafficPolicy;
+import com.yashdotdev.distributed_traffic_control.policy.TrafficPolicyType;
+import com.yashdotdev.distributed_traffic_control.policy.PolicyStatus;
 import com.yashdotdev.distributed_traffic_control.quota.InMemoryQuotaCoordinator;
 import com.yashdotdev.distributed_traffic_control.quota.QuotaCoordinator;
 import com.yashdotdev.distributed_traffic_control.traffic.DefaultTrafficControlService;
@@ -18,14 +27,13 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.observation.ObservationRegistry;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.time.Clock;
 
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
-
 @Configuration
-@EnableConfigurationProperties(AllocationProperties.class)
+@Import(AllocationStrategyConfiguration.class)
 public class TrafficControlConfiguration {
 
     @Bean
@@ -71,11 +79,6 @@ public class TrafficControlConfiguration {
     }
 
     @Bean
-    public FixedAllocationStrategy allocationStrategy(AllocationProperties allocationProperties) {
-        return new FixedAllocationStrategy(allocationProperties);
-    }
-
-    @Bean
     public CapacityAllocator capacityAllocator(LeaseCoordinator leaseCoordinator, AllocationStrategy allocationStrategy, AllocationProperties allocationProperties, LeaseStore leaseStore, Clock clock) {
         return new InMemoryCapacityAllocator(leaseCoordinator, allocationStrategy, allocationProperties, leaseStore, clock);
     }
@@ -85,19 +88,17 @@ public class TrafficControlConfiguration {
             PolicyProvider policyProvider,
             QuotaCoordinator quotaCoordinator,
             CapacityAllocator capacityAllocator,
-            TrafficControlMetrics metrics,
+            TrafficControlMetrics trafficControlMetrics,
             ObservationRegistry observationRegistry,
             DistributedTokenBucket distributedTokenBucket) {
-
         return new TrafficDecisionEngine(
                 policyProvider,
                 quotaCoordinator,
                 capacityAllocator,
-                metrics,
+                trafficControlMetrics,
                 observationRegistry,
                 distributedTokenBucket);
     }
-
     @Bean
     public TrafficControlService trafficControlService(TrafficDecisionEngine trafficDecisionEngine) {
         return new DefaultTrafficControlService(trafficDecisionEngine);
