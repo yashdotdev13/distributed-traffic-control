@@ -6,34 +6,42 @@ import java.util.Optional;
 
 public class DefaultPolicyManagementService implements PolicyManagementService {
 
-    private final InMemoryPolicyProvider policyProvider;
+    private final PolicyStore policyStore;
 
-    public DefaultPolicyManagementService(InMemoryPolicyProvider policyProvider) {
-        this.policyProvider = Objects.requireNonNull(policyProvider, "policyProvider must not be null");
+    public DefaultPolicyManagementService(PolicyStore policyStore) {
+        this.policyStore = Objects.requireNonNull(
+                policyStore,
+                "policyStore must not be null"
+        );
     }
 
     @Override
     public TrafficPolicy registerPolicy(String resource, TrafficPolicy policy) {
-        policyProvider.registerPolicy(resource, policy);
+        policyStore.registerPolicy(resource, policy);
         return policy;
     }
 
     @Override
     public Optional<TrafficPolicy> findPolicy(String resource) {
-        return policyProvider.findPolicy(resource);
+        return policyStore.findPolicy(resource);
     }
+
     @Override
     public List<PolicyRegistration> findAllPolicies() {
-        return policyProvider.findAllPolicies().stream().map(entry -> new PolicyRegistration(entry.getKey(), entry.getValue())).toList();
+        return policyStore.findAllPolicies();
     }
 
     @Override
     public TrafficPolicy updatePolicy(String resource, TrafficPolicy policy) {
-        Optional<TrafficPolicy> existingPolicy = policyProvider.findPolicy(resource);
+        Optional<TrafficPolicy> existingPolicy = policyStore.findPolicy(resource);
+
         if (existingPolicy.isEmpty()) {
-            throw new IllegalArgumentException("No policy registered for resource: " + resource);
+            throw new IllegalArgumentException(
+                    "No policy registered for resource: " + resource
+            );
         }
-        policyProvider.registerPolicy(resource, policy);
+
+        policyStore.registerPolicy(resource, policy);
         return policy;
     }
 
@@ -48,22 +56,22 @@ public class DefaultPolicyManagementService implements PolicyManagementService {
     }
 
     private TrafficPolicy changePolicyStatus(String resource, PolicyStatus status) {
-        TrafficPolicy policy = policyProvider.findPolicy(resource)
+        TrafficPolicy policy = policyStore.findPolicy(resource)
                 .orElseThrow(() -> new PolicyNotFoundException(resource));
 
         TrafficPolicy updatedPolicy = policy.withStatus(status);
-        policyProvider.registerPolicy(resource, updatedPolicy);
+        policyStore.registerPolicy(resource, updatedPolicy);
 
         return updatedPolicy;
     }
 
     @Override
     public void removePolicy(String resource) {
-        policyProvider.removePolicy(resource);
+        policyStore.removePolicy(resource);
     }
 
     @Override
     public void setDefaultPolicy(TrafficPolicy policy) {
-        policyProvider.setDefaultPolicy(policy);
+        policyStore.setDefaultPolicy(policy);
     }
 }
