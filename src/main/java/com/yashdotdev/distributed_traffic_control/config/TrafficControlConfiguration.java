@@ -11,13 +11,7 @@ import com.yashdotdev.distributed_traffic_control.lease.LeaseCoordinator;
 import com.yashdotdev.distributed_traffic_control.lease.LeaseStore;
 import com.yashdotdev.distributed_traffic_control.lease.RedisLeaseCoordinator;
 import com.yashdotdev.distributed_traffic_control.monitoring.TrafficControlMetrics;
-import com.yashdotdev.distributed_traffic_control.policy.DefaultPolicyManagementService;
-import com.yashdotdev.distributed_traffic_control.policy.InMemoryPolicyProvider;
-import com.yashdotdev.distributed_traffic_control.policy.PolicyManagementService;
-import com.yashdotdev.distributed_traffic_control.policy.PolicyProvider;
-import com.yashdotdev.distributed_traffic_control.policy.TrafficPolicy;
-import com.yashdotdev.distributed_traffic_control.policy.TrafficPolicyType;
-import com.yashdotdev.distributed_traffic_control.policy.PolicyStatus;
+import com.yashdotdev.distributed_traffic_control.policy.*;
 import com.yashdotdev.distributed_traffic_control.quota.InMemoryQuotaCoordinator;
 import com.yashdotdev.distributed_traffic_control.quota.QuotaCoordinator;
 import com.yashdotdev.distributed_traffic_control.traffic.DefaultTrafficControlService;
@@ -47,13 +41,19 @@ public class TrafficControlConfiguration {
     }
 
     @Bean
-    public InMemoryPolicyProvider policyProvider(TrafficPolicy defaultTrafficPolicy) {
-        return new InMemoryPolicyProvider(defaultTrafficPolicy);
+    public RedisPolicyStore policyStore(
+            StringRedisTemplate redisTemplate,
+            TrafficPolicy defaultTrafficPolicy) {
+
+        RedisPolicyStore policyStore = new RedisPolicyStore(redisTemplate);
+        policyStore.initializeDefaultPolicy(defaultTrafficPolicy);
+
+        return policyStore;
     }
 
     @Bean
-    public PolicyManagementService policyManagementService(InMemoryPolicyProvider policyProvider) {
-        return new DefaultPolicyManagementService(policyProvider);
+    public PolicyManagementService policyManagementService(PolicyStore policyStore) {
+        return new DefaultPolicyManagementService(policyStore);
     }
 
 
