@@ -1,27 +1,40 @@
+# ---------- Build stage ----------
 FROM eclipse-temurin:21-jdk AS build
 
 WORKDIR /app
 
-COPY . .
+# Copy Maven wrapper and build configuration first for better layer caching
+COPY mvnw pom.xml ./
+COPY .mvn .mvn
 
 RUN chmod +x mvnw
-RUN ./mvnw -DskipTests package
+
+# Download dependencies before copying application source
+RUN ./mvnw -B dependency:go-offline
+
+COPY src ./src
+
+RUN ./mvnw -B -DskipTests package
 
 
-FROM eclipse-temurin:21-jre
+# ---------- Runtime stage ----------
+FROM eclipse-temurin:21-jre AS runtime
 
 WORKDIR /app
 
+# curl is required by the existing Docker Compose healthcheck
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system --gid 10001 appuser \
+    && useradd --system --uid 10001 --gid appuser \
+        --no-create-home appuser
 
-RUN useradd --system --create-home appuser
+# Copy only the packaged application
+COPY --from=build --chown=10001:10001 /app/target/*.jar /app/app.jar
 
-COPY --from=build /app/target/*.jar app.jar
-
-USER appuser
+USER 10001:10001
 
 EXPOSE 8081
 
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]
