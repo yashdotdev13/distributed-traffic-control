@@ -160,4 +160,41 @@ class PolicyControllerIntegrationTest {
         assertEquals(resource, response.getBody().getResource());
         assertEquals(20, response.getBody().getCapacity());
     }
+
+    @Test
+    void shouldReturnNotFoundForMissingPolicy() {
+        ResponseEntity<String> response =
+                restTemplate.getForEntity(
+                        policyUri("/api/contract/missing"),
+                        String.class
+                );
+
+        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
+    }
+
+    @Test
+    void shouldUpdatePolicyThroughRealHttpEndpoint() {
+        String resource = "/api/contract/update";
+
+        restTemplate.exchange(
+                baseUrl(),
+                HttpMethod.POST,
+                createRequest("update-policy", "Original Policy", resource, 10),
+                PolicyResponse.class
+        );
+
+        ResponseEntity<PolicyResponse> response =
+                restTemplate.exchange(
+                        policyUri(resource),
+                        HttpMethod.PUT,
+                        createRequest("update-policy", "Updated Policy", resource, 50),
+                        PolicyResponse.class
+                );
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("Updated Policy", response.getBody().getName());
+        assertEquals(50, response.getBody().getCapacity());
+        assertEquals(resource, response.getBody().getResource());
+    }
 }
