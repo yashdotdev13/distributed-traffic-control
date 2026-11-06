@@ -3,6 +3,10 @@ services:
   redis:
     image: redis:${REDIS_VERSION:-7.4}-alpine
     container_name: traffic-control-redis
+    deploy:
+      resources:
+        limits:
+          memory: "${REDIS_MEMORY:-256M}"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -23,6 +27,11 @@ services:
   gateway-1:
     image: distributed-traffic-control:latest
     container_name: traffic-control-gateway-1
+    deploy:
+      resources:
+        limits:
+          cpus: "${GATEWAY_CPUS:-1.0}"
+          memory: "${GATEWAY_MEMORY:-512M}"
     depends_on:
       redis:
         condition: service_healthy
@@ -49,6 +58,11 @@ services:
   gateway-2:
     image: distributed-traffic-control:latest
     container_name: traffic-control-gateway-2
+    deploy:
+      resources:
+        limits:
+          cpus: "${GATEWAY_CPUS:-1.0}"
+          memory: "${GATEWAY_MEMORY:-512M}"
     depends_on:
       redis:
         condition: service_healthy
@@ -75,6 +89,11 @@ services:
   gateway-3:
     image: distributed-traffic-control:latest
     container_name: traffic-control-gateway-3
+    deploy:
+      resources:
+        limits:
+          cpus: "${GATEWAY_CPUS:-1.0}"
+          memory: "${GATEWAY_MEMORY:-512M}"
     depends_on:
       redis:
         condition: service_healthy
