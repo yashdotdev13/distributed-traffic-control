@@ -6,9 +6,11 @@ import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.*;
 
 import java.time.Instant;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -108,5 +110,30 @@ class PolicyControllerIntegrationTest {
                 """, headers);
         ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, request, String.class);
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+    }
+
+    @Test
+    void shouldListPoliciesThroughRealHttpEndpoint() {
+        String resource = "/api/contract/list";
+
+        restTemplate.exchange(
+                baseUrl(),
+                HttpMethod.POST,
+                createRequest("list-policy", "List Policy", resource, 10),
+                PolicyResponse.class
+        );
+
+        ResponseEntity<List<PolicyResponse>> response =
+                restTemplate.exchange(
+                        baseUrl(),
+                        HttpMethod.GET,
+                        null,
+                        new ParameterizedTypeReference<>() {}
+                );
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertTrue(response.getBody().stream()
+                .anyMatch(policy -> resource.equals(policy.getResource())));
     }
 }
