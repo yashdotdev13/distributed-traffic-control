@@ -241,28 +241,24 @@ class PolicyControllerIntegrationTest {
                 .toUri();
     }
 
-    private HttpEntity<String> createRequest(
-            String policyId,
-            String name,
-            String resource,
-            long capacity) {
+    private HttpEntity<String> createRequest(String policyId, String name, String resource, long capacity) {
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
 
         String body = """
-            {
-              "policyId": "%s",
-              "name": "%s",
-              "type": "TOKEN_BUCKET",
-              "status": "ACTIVE",
-              "capacity": %d,
-              "refillRate": 1,
-              "windowDuration": null,
-              "createdAt": "2026-09-04T00:00:00Z",
-              "resource": "%s"
-            }
-            """.formatted(policyId, name, capacity, resource);
+                {
+                  "policyId": "%s",
+                  "name": "%s",
+                  "type": "TOKEN_BUCKET",
+                  "status": "ACTIVE",
+                  "capacity": %d,
+                  "refillRate": 1,
+                  "windowDuration": null,
+                  "createdAt": "2026-09-04T00:00:00Z",
+                  "resource": "%s"
+                }
+                """.formatted(policyId, name, capacity, resource);
 
         return new HttpEntity<>(body, headers);
     }
