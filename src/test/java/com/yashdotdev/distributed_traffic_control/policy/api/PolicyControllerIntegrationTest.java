@@ -136,4 +136,28 @@ class PolicyControllerIntegrationTest {
         assertTrue(response.getBody().stream()
                 .anyMatch(policy -> resource.equals(policy.getResource())));
     }
+
+    @Test
+    void shouldRetrievePolicyByResourceThroughRealHttpEndpoint() {
+        String resource = "/api/contract/read";
+
+        restTemplate.exchange(
+                baseUrl(),
+                HttpMethod.POST,
+                createRequest("read-policy", "Read Policy", resource, 20),
+                PolicyResponse.class
+        );
+
+        ResponseEntity<PolicyResponse> response =
+                restTemplate.getForEntity(
+                        policyUri(resource),
+                        PolicyResponse.class
+                );
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("read-policy", response.getBody().getPolicyId());
+        assertEquals(resource, response.getBody().getResource());
+        assertEquals(20, response.getBody().getCapacity());
+    }
 }
