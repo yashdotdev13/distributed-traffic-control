@@ -19,6 +19,8 @@ import com.yashdotdev.distributed_traffic_control.traffic.TrafficControlService;
 import com.yashdotdev.distributed_traffic_control.traffic.TrafficDecisionEngine;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.observation.ObservationRegistry;
+
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
@@ -28,6 +30,7 @@ import java.time.Clock;
 
 @Configuration
 @Import(AllocationStrategyConfiguration.class)
+@EnableConfigurationProperties(RedisKeyProperties.class)
 public class TrafficControlConfiguration {
 
     @Bean
@@ -66,9 +69,11 @@ public class TrafficControlConfiguration {
     public LeaseCoordinator leaseCoordinator(
             StringRedisTemplate redisTemplate,
             Clock clock,
-            ObservationRegistry observationRegistry) {
+            ObservationRegistry observationRegistry,
+            RedisKeyBuilder redisKeyBuilder) {
         return new RedisLeaseCoordinator(
                 redisTemplate,
+                redisKeyBuilder,
                 clock,
                 observationRegistry);
     }
@@ -109,4 +114,8 @@ public class TrafficControlConfiguration {
         return new TrafficControlMetrics(meterRegistry);
     }
 
+    @Bean
+    public RedisKeyBuilder redisKeyBuilder(RedisKeyProperties properties) {
+        return new RedisKeyBuilder(properties);
+    }
 }

@@ -1,6 +1,5 @@
 package com.yashdotdev.distributed_traffic_control.lease;
 
-
 public record GlobalCapacityKey(String policyId, String resource) {
 
     public GlobalCapacityKey {
