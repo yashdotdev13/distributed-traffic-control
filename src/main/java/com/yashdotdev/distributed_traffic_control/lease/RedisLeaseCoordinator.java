@@ -1,5 +1,6 @@
 package com.yashdotdev.distributed_traffic_control.lease;
 
+import com.yashdotdev.distributed_traffic_control.config.RedisKeyBuilder;
 import com.yashdotdev.distributed_traffic_control.quota.QuotaKey;
 import io.micrometer.observation.Observation;
 import io.micrometer.observation.ObservationRegistry;
@@ -16,10 +17,7 @@ import java.util.UUID;
 public class RedisLeaseCoordinator
         implements LeaseCoordinator, DistributedTokenBucket {
 
-    private static final String QUOTA_KEY_PREFIX = "traffic-control:quota:";
-    private static final String LEASE_KEY_PREFIX = "traffic-control:lease:";
-    private static final String LEASE_REGISTRY_SUFFIX = ":leases";
-
+    private static final String DEFAULT_NAMESPACE = "traffic-control";
 
     private static final String TOKEN_BUCKET_KEY_PREFIX =
             "traffic-control:token-bucket:";
@@ -93,8 +91,6 @@ public class RedisLeaseCoordinator
                 return math.floor(tokens)
                 """, Long.class);
 
-
-
     private static final DefaultRedisScript<Long> INITIALIZE_TOKEN_BUCKET_SCRIPT =
             new DefaultRedisScript<>("""
                 if redis.call('EXISTS', KEYS[1]) == 1 then
@@ -114,8 +110,6 @@ public class RedisLeaseCoordinator
 
                 return 1
                 """, Long.class);
-
-
 
     /**
      * Atomically:
@@ -445,32 +439,63 @@ public class RedisLeaseCoordinator
             """, Long.class);
 
     private final StringRedisTemplate redisTemplate;
+    private final RedisKeyBuilder keyBuilder;
     private final Clock clock;
     private final ObservationRegistry observationRegistry;
 
     public RedisLeaseCoordinator(StringRedisTemplate redisTemplate) {
-        this(redisTemplate, Clock.systemUTC(), null);
+        this(redisTemplate, new RedisKeyBuilder(DEFAULT_NAMESPACE), Clock.systemUTC(), null);
     }
 
     public RedisLeaseCoordinator(StringRedisTemplate redisTemplate, Clock clock) {
-        this(redisTemplate, clock, null);
+        this(redisTemplate, new RedisKeyBuilder(DEFAULT_NAMESPACE), clock, null);
     }
 
     public RedisLeaseCoordinator(
             StringRedisTemplate redisTemplate,
             Clock clock,
             ObservationRegistry observationRegistry) {
+        this(redisTemplate, new RedisKeyBuilder(DEFAULT_NAMESPACE), clock, observationRegistry);
+    }
+
+    public RedisLeaseCoordinator(
+            StringRedisTemplate redisTemplate,
+            RedisKeyBuilder keyBuilder) {
+        this(redisTemplate, keyBuilder, Clock.systemUTC(), null);
+    }
+
+    public RedisLeaseCoordinator(
+            StringRedisTemplate redisTemplate,
+            RedisKeyBuilder keyBuilder,
+            Clock clock) {
+        this(redisTemplate, keyBuilder, clock, null);
+    }
+
+    public RedisLeaseCoordinator(
+            StringRedisTemplate redisTemplate,
+            RedisKeyBuilder keyBuilder,
+            Clock clock,
+            ObservationRegistry observationRegistry) {
         if (redisTemplate == null) {
             throw new IllegalArgumentException("redisTemplate must not be null");
+        }
+        if (keyBuilder == null) {
+            throw new IllegalArgumentException("keyBuilder must not be null");
         }
         if (clock == null) {
             throw new IllegalArgumentException("clock must not be null");
         }
 
         this.redisTemplate = redisTemplate;
+        this.keyBuilder = keyBuilder;
         this.clock = clock;
         this.observationRegistry = observationRegistry;
     }
+
+    public RedisKeyBuilder getKeyBuilder() {
+        return keyBuilder;
+    }
+
     @Override
     public void registerCapacity(GlobalCapacityKey capacityKey, long capacity) {
         if (capacityKey == null) {
@@ -483,7 +508,7 @@ public class RedisLeaseCoordinator
         }
 
         redisTemplate.opsForValue().setIfAbsent(
-                buildGlobalCapacityRedisKey(capacityKey),
+                keyBuilder.globalCapacityKey(capacityKey),
                 String.valueOf(capacity));
 
         redisTemplate.execute(
@@ -500,7 +525,7 @@ public class RedisLeaseCoordinator
         }
 
         Boolean capacityDeleted = redisTemplate.delete(
-                buildGlobalCapacityRedisKey(capacityKey));
+                keyBuilder.globalCapacityKey(capacityKey));
 
         Boolean tokenBucketDeleted = redisTemplate.delete(
                 buildTokenBucketRedisKey(capacityKey));
@@ -508,7 +533,6 @@ public class RedisLeaseCoordinator
         return Boolean.TRUE.equals(capacityDeleted)
                 || Boolean.TRUE.equals(tokenBucketDeleted);
     }
-
 
     @Override
     public Optional<QuotaLease> acquireLease(QuotaKey quotaKey, String nodeId, long requestedCapacity, Duration leaseDuration) {
@@ -528,9 +552,9 @@ public class RedisLeaseCoordinator
         Instant expiresAt = issuedAt.plus(leaseDuration);
         String leaseId = UUID.randomUUID().toString();
         GlobalCapacityKey capacityKey = new GlobalCapacityKey(quotaKey.getPolicyId(), quotaKey.getResources());
-        String quotaRedisKey = buildGlobalCapacityRedisKey(capacityKey);
-        String leaseRedisKey = buildLeaseRedisKey(leaseId);
-        String leaseRegistryRedisKey = buildLeaseRegistryRedisKey(capacityKey);
+        String quotaRedisKey = keyBuilder.globalCapacityKey(capacityKey);
+        String leaseRedisKey = keyBuilder.leaseKey(leaseId);
+        String leaseRegistryRedisKey = keyBuilder.leaseRegistryKey(capacityKey);
         Long result = observe(
                 "redis.lease.acquire",
                 () -> redisTemplate.execute(
@@ -560,7 +584,7 @@ public class RedisLeaseCoordinator
         if (currentTime == null) {
             throw new IllegalArgumentException("currentTime must not be null");
         }
-        String leaseRedisKey = buildLeaseRedisKey(lease.getLeaseId());
+        String leaseRedisKey = keyBuilder.leaseKey(lease.getLeaseId());
 
         Long result = observe(
                 "redis.lease.consume",
@@ -605,9 +629,9 @@ public class RedisLeaseCoordinator
             throw new IllegalArgumentException("extension must be greater than zero");
         }
 
-        String leaseRedisKey = buildLeaseRedisKey(lease.getLeaseId());
+        String leaseRedisKey = keyBuilder.leaseKey(lease.getLeaseId());
         GlobalCapacityKey capacityKey = new GlobalCapacityKey(lease.getQuotaKey().getPolicyId(), lease.getQuotaKey().getResources());
-        String leaseRegistryRedisKey = buildLeaseRegistryRedisKey(capacityKey);
+        String leaseRegistryRedisKey = keyBuilder.leaseRegistryKey(capacityKey);
         Instant currentTime = clock.instant();
         Long result = observe(
                 "redis.lease.renew",
@@ -633,11 +657,11 @@ public class RedisLeaseCoordinator
             throw new IllegalArgumentException("lease must not be null");
         }
 
-        String leaseRedisKey = buildLeaseRedisKey(lease.getLeaseId());
+        String leaseRedisKey = keyBuilder.leaseKey(lease.getLeaseId());
         QuotaKey quotaKey = lease.getQuotaKey();
         GlobalCapacityKey capacityKey = new GlobalCapacityKey(quotaKey.getPolicyId(), quotaKey.getResources());
-        String quotaRedisKey = buildGlobalCapacityRedisKey(capacityKey);
-        String leaseRegistryRedisKey = buildLeaseRegistryRedisKey(capacityKey);
+        String quotaRedisKey = keyBuilder.globalCapacityKey(capacityKey);
+        String leaseRegistryRedisKey = keyBuilder.leaseRegistryKey(capacityKey);
         Long result = observe(
                 "redis.lease.release",
                 () -> redisTemplate.execute(
@@ -667,21 +691,11 @@ public class RedisLeaseCoordinator
         return result == null ? -1L : result;
     }
 
-    private String buildGlobalCapacityRedisKey(GlobalCapacityKey capacityKey) {
-        return QUOTA_KEY_PREFIX + capacityKey.policyId() + ":" + capacityKey.resource();
-    }
-
     private String buildTokenBucketRedisKey(GlobalCapacityKey capacityKey) {
         return TOKEN_BUCKET_KEY_PREFIX
                 + capacityKey.policyId() + ":" + capacityKey.resource();
     }
 
-    private String buildLeaseRegistryRedisKey(GlobalCapacityKey capacityKey) {
-        return buildGlobalCapacityRedisKey(capacityKey) + LEASE_REGISTRY_SUFFIX;
-    }
-    private String buildLeaseRedisKey(String leaseId) {
-        return LEASE_KEY_PREFIX + leaseId;
-    }
     private void validateQuotaKey(QuotaKey quotaKey) {
         if (quotaKey == null) {
             throw new IllegalArgumentException("quotaKey must not be null");
